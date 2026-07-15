@@ -26,21 +26,26 @@ inline uintptr_t il2cpp_get_handle(uintptr_t addr) {
 }
 
 // Internal cheat memory access: we run INSIDE the target process, so
-// reads/writes are plain pointer dereferences of game memory.
+// reads/writes are plain pointer dereferences of game memory. They are
+// guarded with SEH so a wrong offset / invalid pointer does NOT crash the
+// game (it just yields 0 / fails). This is essential for an internal cheat
+// where a bad read would otherwise raise an access violation in RustClient.
 class Mem {
 public:
+    // Raw, SEH-guarded byte copy. Returns false on any access violation.
+    bool tryRead(uintptr_t addr, void* buf, size_t sz) const;
+    bool tryWrite(uintptr_t addr, const void* buf, size_t sz) const;
+
     template <typename T>
     T read(uintptr_t addr) const {
         T val{};
-        if (addr) val = *(const T*)addr;
+        tryRead(addr, &val, sizeof(T));
         return val;
     }
 
     template <typename T>
     bool write(uintptr_t addr, const T& val) const {
-        if (!addr) return false;
-        *(T*)addr = val;
-        return true;
+        return tryWrite(addr, &val, sizeof(T));
     }
 
     // Follow a pointer chain: *(*(base + o0) + o1) + ...
