@@ -421,36 +421,23 @@ static DWORD WINAPI cheatMain(LPVOID) {
     while (!(g_il2cppBase = driver.getModuleBase(L"GameAssembly.dll")))
         Sleep(500);
 
-    OverlaySettings os;
-    os.targetClass  = L"UnityWndClass";
-    os.targetWindow = L"Rust";
-    if (!g_overlay.init(os)) {
-        MessageBoxW(nullptr, L"Failed to create overlay.", L"Rust Trainer", MB_OK | MB_ICONERROR);
+    if (!g_overlay.init()) {
+        MessageBoxW(nullptr, L"Failed to hook Present.", L"Rust Trainer", MB_OK | MB_ICONERROR);
         return 1;
     }
+
+    g_overlay.setDraw([]() {
+        if (g_overlay.isMenuOpen()) drawMenu();
+        drawESP();
+    });
 
     // Launch cheat features in background
     std::thread cheatThr(cheatThread);
 
-    bool menuOpen = true;
-    g_overlay.setMousePassthrough(!menuOpen);   // menu visible -> capture mouse
-    while (g_running) {
-        if (GetAsyncKeyState(VK_INSERT) & 1) {
-            menuOpen = !menuOpen;
-            g_overlay.setMousePassthrough(!menuOpen);
-        }
-        if (GetAsyncKeyState(VK_END) & 1) {
-            g_running = false;
-            break;
-        }
-
-        g_overlay.frame([&]() {
-            if (menuOpen) drawMenu();
-            drawESP();
-        });
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(8));
-    }
+    // Rendering happens inside the game's own Present hook, so this thread
+    // just needs to stay alive until we're asked to stop.
+    while (g_running)
+        Sleep(100);
 
     g_running = false;
     if (cheatThr.joinable()) cheatThr.join();

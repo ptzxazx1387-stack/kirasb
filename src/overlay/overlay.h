@@ -1,44 +1,45 @@
 #pragma once
 #include <windows.h>
 #include <d3d11.h>
-#include <dxgi1_3.h>
+#include <dxgi.h>
 #include <functional>
 #include <string>
 
-struct OverlaySettings {
-    std::wstring targetWindow = L"Rust";        // window title to overlay
-    std::wstring targetClass  = L"UnityWndClass";
-};
-
-// A borderless, top-most, click-through, transparent D3D11 window that
-// renders an ImGui frame each tick. Call frame(draw) in your loop; the
-// supplied callback builds the ImGui UI (menu + ESP). Mouse input passes
-// through to the game; the menu is toggled from your own code.
+// Internal D3D11 overlay implemented by hooking the game's own
+// IDXGISwapChain::Present. We draw ImGui into the game's back buffer right
+// before the original Present is called, so there is NO second device, NO
+// second window and NO focus / DWM contention (which is what made a separate
+// overlay window hang/crash Rust).
 class Overlay {
 public:
-    bool init(const OverlaySettings& s);
+    bool init();                              // install the Present hook
     void shutdown();
-    void frame(const std::function<void()>& draw);
+    void setDraw(const std::function<void()>& d);
 
-    // Toggle click-through. When passthrough is true the mouse falls through
-    // to the game (menu hidden). When false the overlay captures the mouse so
-    // ImGui widgets (menu) are clickable.
-    void setMousePassthrough(bool passthrough);
-
-    int width  = 0;
-    int height = 0;
+    bool isMenuOpen() const { return m_menuOpen; }
 
 private:
-    HWND                   hwnd = nullptr;
-    ID3D11Device*          pd3dDevice         = nullptr;
-    ID3D11DeviceContext*   pd3dDeviceContext  = nullptr;
-    IDXGISwapChain1*       pSwapChain         = nullptr;
-    ID3D11RenderTargetView* pRenderTargetView = nullptr;
+    static HRESULT STDMETHODCALLTYPE hkPresent(IDXGISwapChain* p, UINT SyncInterval, UINT Flags);
+    void onPresent(IDXGISwapChain* p, UINT SyncInterval, UINT Flags);
 
-    bool createDeviceD3D(HWND hWnd);
-    void cleanupDeviceD3D();
+    void ensureInit(IDXGISwapChain* p);       // lazy ImGui/device init on 1st present
+    void resize(IDXGISwapChain* p);           // recreate RTV if size changed
 
-    HWND findTarget(const OverlaySettings& s);
-    void matchTarget(const OverlaySettings& s);
-    OverlaySettings settings;
+    bool   m_inited       = false;
+    bool   m_menuOpen     = true;
+    bool   m_insertPrev   = false;
+
+    IDXGISwapChain*       m_mainSwapChain = nullptr;
+    ID3D11Device*         m_device        = nullptr;
+    ID3D11DeviceContext*  m_context       = nullptr;
+    ID3D11RenderTargetView* m_rtv         = nullptr;
+    int    m_width  = 0;
+    int    m_height = 0;
+    HWND   m_gameHwnd = nullptr;
+
+    std::function<void()> m_draw;
+
+    static Overlay*  s_inst;
+    static void*     s_origPresent;           // original vtable entry
+    static constexpr int PRESENT_VTABLE_INDEX = 8;
 };
