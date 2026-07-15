@@ -58,18 +58,16 @@ bool Overlay::createDeviceD3D(HWND hWnd) {
     sd.SampleDesc.Count   = 1;
     sd.SampleDesc.Quality = 0;
 
-    sd.AlphaMode  = DXGI_ALPHA_MODE_PREMULTIPLIED;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    // Use a bit-blt (DISCARD) swap chain, NOT flip. A flip swap chain on top
+    // of the (also flip) game causes DWM to deadlock/hang the moment the
+    // overlay is interacted with. Bit-blt presents via blit and never serializes
+    // with the game's flip chain. Transparency is done with a color key
+    // (black -> transparent) since premultiplied alpha needs flip.
+    sd.AlphaMode  = DXGI_ALPHA_MODE_UNSPECIFIED;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     hr = factory->CreateSwapChainForHwnd(pd3dDevice, hWnd, &sd, nullptr, nullptr, &pSwapChain);
-    if (FAILED(hr)) {
-        // bit-blt fallback: premultiplied alpha is not valid here, so use a
-        // color key (black -> transparent) via the layered-window attribute.
-        sd.AlphaMode  = DXGI_ALPHA_MODE_UNSPECIFIED;
-        sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-        hr = factory->CreateSwapChainForHwnd(pd3dDevice, hWnd, &sd, nullptr, nullptr, &pSwapChain);
-        if (SUCCEEDED(hr))
-            SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
-    }
+    if (SUCCEEDED(hr))
+        SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
     dxgiDevice->Release();
     adapter->Release();
     factory->Release();
