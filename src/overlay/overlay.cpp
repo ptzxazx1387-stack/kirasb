@@ -61,13 +61,19 @@ bool Overlay::init(const OverlaySettings& s) {
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_CLASSDC;
     wc.lpfnWndProc   = OverlayWndProc;
     wc.lpszClassName = L"RustEspOverlay";
-    RegisterClassExW(&wc);
+    if (!RegisterClassExW(&wc)) {
+        MessageBoxW(nullptr, L"overlay: RegisterClassExW failed", L"Rust Trainer", MB_OK);
+        return false;
+    }
 
     hwnd = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT,
         L"RustEspOverlay", L"", WS_POPUP,
         0, 0, 100, 100, nullptr, nullptr, nullptr, nullptr);
-    if (!hwnd) return false;
+    if (!hwnd) {
+        MessageBoxW(nullptr, L"overlay: CreateWindowExW failed", L"Rust Trainer", MB_OK);
+        return false;
+    }
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -75,7 +81,10 @@ bool Overlay::init(const OverlaySettings& s) {
     io.MouseDrawCursor = false;   // let clicks fall through to the game
     (void)io;
 
-    if (!createDeviceD3D(hwnd)) return false;
+    if (!createDeviceD3D(hwnd)) {
+        MessageBoxW(nullptr, L"overlay: createDeviceD3D failed (D3D11 device/swapchain)", L"Rust Trainer", MB_OK);
+        return false;
+    }
 
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(pd3dDevice, pd3dDeviceContext);
