@@ -232,7 +232,7 @@ static void drawESP() {
 
         // Skip unless we're in debug mode
         if (g_settings.debugAll) {
-            const float h = ImClamp(2000.0f / (p.distance + 1.0f), 30.0f, 320.0f);
+            const float h = IM_CLAMP(2000.0f / (p.distance + 1.0f), 30.0f, 320.0f);
             const float w = h * 0.5f;
             const ImVec2 tl(screen.x - w*0.5f, screen.y - h*0.5f);
             const ImVec2 br(screen.x + w*0.5f, screen.y + h*0.5f);
@@ -248,7 +248,7 @@ static void drawESP() {
         const bool teammate = (localTeam != 0 && p.team == localTeam);
         ImVec4 col = teammate ? g_settings.teamColor : g_settings.boxColor;
 
-        const float h = ImClamp(2000.0f / (p.distance + 1.0f), 20.0f, 320.0f);
+        const float h = IM_CLAMP(2000.0f / (p.distance + 1.0f), 20.0f, 320.0f);
         const float w = h * 0.5f;
         const ImVec2 topLeft(  screen.x - w * 0.5f, screen.y - h);
         const ImVec2 botRight( screen.x + w * 0.5f, screen.y);
@@ -264,7 +264,7 @@ static void drawESP() {
             draw->AddText({ topLeft.x, topLeft.y - 14 }, IM_COL32(255, 255, 255, 255), p.name.c_str());
 
         if (g_settings.showHealth && p.maxHealth > 0.f) {
-            const float frac = ImClamp(p.health / p.maxHealth, 0.f, 1.f);
+            const float frac = IM_CLAMP(p.health / p.maxHealth, 0.f, 1.f);
             const ImVec2 hb0(topLeft.x - 6, botRight.y - (h * frac));
             const ImVec2 hb1(topLeft.x - 2, botRight.y);
             draw->AddRectFilled(hb0, hb1, IM_COL32(0, 255, 0, 220));
