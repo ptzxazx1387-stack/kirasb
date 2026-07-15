@@ -34,4 +34,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rust-trainer
-          path: build/Release/rust_trainer.exe
+          path: build/Release/rust_trainer.dll
