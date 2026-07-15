@@ -1,7 +1,7 @@
 // ============================================================================
 //  Rust offline trainer - external ESP/Wallhack overlay + cheats
 //
-//  - Reads game memory with ReadProcessMemory (no driver needed for offline).
+//  - Runs INSIDE RustClient.exe (injected DLL); memory access is direct.
 //  - Uses the offsets you dumped into src/offsets/rust-dumper_output.h.
 //  - Draws player ESP with an ImGui + D3D11 transparent overlay.
 //  - Dear ImGui is fetched automatically at configure time (see CMakeLists.txt).
@@ -106,7 +106,7 @@ struct ItemESP {
 // Gather items (WorldItem / DroppedItem)
 static std::vector<ItemESP> gatherItems(const Vec3& camPos) {
     std::vector<ItemESP> out;
-    if (!g_il2cppBase || !driver.hProcess) return out;
+    if (!g_il2cppBase) return out;
 
     const uintptr_t staticClass = g_il2cppBase + base_networkable::base_address;
     const uintptr_t sfields     = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
@@ -325,7 +325,7 @@ static void cheatThread() {
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50)); // 20 Hz
 
-        if (!g_il2cppBase || !driver.hProcess) continue;
+        if (!g_il2cppBase) continue;
 
         uintptr_t local = getLocalPlayer();
         if (!local) continue;
@@ -413,21 +413,13 @@ static void cheatThread() {
 }
 
 // ---------------------------------------------------------------------------
-//  Entry
+//  Internal entry point. This module is injected into RustClient.exe, so all
+//  memory access is direct (see Mem in mem.h). We wait for GameAssembly.dll
+//  to be loaded, then run the overlay + cheat loop on a detached thread.
 // ---------------------------------------------------------------------------
-int main() {
-    // Your offline fork's executable name - adjust if different.
-    // Fall back to matching the Unity window class so we never have to
-    // know the exact exe name.
-    if (!driver.attach(L"RustClient.exe")
-        && !driver.attach(L"Rust.exe")
-        && !driver.attachByWindowClass(L"UnityWndClass")) {
-            MessageBoxW(nullptr, L"Could not find the Rust process.\nLaunch the offline build first.",
-                        L"Rust Trainer", MB_OK | MB_ICONERROR);
-            return 1;
-    }
-
-    g_il2cppBase = driver.getModuleBase(L"GameAssembly.dll");
+static DWORD WINAPI cheatMain(LPVOID) {
+    while (!(g_il2cppBase = driver.getModuleBase(L"GameAssembly.dll")))
+        Sleep(500);
 
     OverlaySettings os;
     os.targetClass  = L"UnityWndClass";
@@ -461,4 +453,12 @@ int main() {
     if (cheatThr.joinable()) cheatThr.join();
     g_overlay.shutdown();
     return 0;
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
+    if (reason == DLL_PROCESS_ATTACH) {
+        DisableThreadLibraryCalls(hModule);
+        CreateThread(nullptr, 0, cheatMain, hModule, 0, nullptr);
+    }
+    return TRUE;
 }

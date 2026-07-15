@@ -21,7 +21,7 @@ static std::string getClassName(uintptr_t obj) {
 
 std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     std::vector<EntityESP> out;
-    if (!g_il2cppBase || !driver.hProcess) return out;
+    if (!g_il2cppBase) return out;
 
     // BaseNetworkable.clientEntities is a static field on the BaseNetworkable
     // class inside GameAssembly.dll.

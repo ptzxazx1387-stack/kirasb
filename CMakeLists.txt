@@ -36,9 +36,9 @@ target_include_directories(imgui PUBLIC
 )
 
 # ---------------------------------------------------------------------------
-#  Trainer executable.
+#  Trainer as an injected DLL (internal cheat).
 # ---------------------------------------------------------------------------
-add_executable(rust_trainer
+add_library(rust_trainer SHARED
     src/main.cpp
     src/core/mem.cpp
     src/core/mem.h
