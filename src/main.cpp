@@ -14,8 +14,7 @@
 
 #include "mem.h"
 #include "rust-dumper_output.h"
-#include "materials.h"
-#include "math.h"
+#include "vecmath.h"
 #include "esp.h"
 #include "overlay.h"
 #include "imgui.h"
@@ -69,7 +68,7 @@ static uintptr_t getLocalPlayer() {
         if (entity) return entity;
     }
     // Fallback: scan entity list for a player with empty display name (local)
-    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_networkable;
+    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_address;
     const uintptr_t listStatic  = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
     const uintptr_t entitiesList = driver.read<uintptr_t>(listStatic + base_networkable::entities);
     if (!entitiesList) return 0;
@@ -109,7 +108,7 @@ static std::vector<ItemESP> gatherItems(const Vec3& camPos) {
     std::vector<ItemESP> out;
     if (!g_il2cppBase || !driver.hProcess) return out;
 
-    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_networkable;
+    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_address;
     const uintptr_t sfields     = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
     if (!sfields) return out;
     const uintptr_t entitiesList = driver.read<uintptr_t>(sfields + base_networkable::entities);

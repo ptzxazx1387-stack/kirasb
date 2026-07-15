@@ -25,7 +25,7 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
 
     // BaseNetworkable.clientEntities is a static field on the BaseNetworkable
     // class inside GameAssembly.dll.
-    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_networkable;
+    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_address;
     const uintptr_t sfields     = staticClass + base_networkable::static_fields;
     const uintptr_t entitiesList = driver.read<uintptr_t>(sfields + base_networkable::entities);
     if (!entitiesList) return out;

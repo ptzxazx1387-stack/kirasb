@@ -7,7 +7,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM,
 
 static LRESULT CALLBACK OverlayWndProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     if (ImGui_ImplWin32_WndProcHandler(h, msg, w, l)) return TRUE;
-    return DefWindowProc(h, msg, w, l);
+    return DefWindowProcW(h, msg, w, l);
 }
 
 static BOOL s_imguiInit = FALSE;
@@ -56,13 +56,14 @@ void Overlay::cleanupDeviceD3D() {
 bool Overlay::init(const OverlaySettings& s) {
     settings = s;
 
-    WNDCLASSEX wc{ sizeof(wc) };
+    WNDCLASSEXW wc{};
+    wc.cbSize        = sizeof(WNDCLASSEXW);
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_CLASSDC;
     wc.lpfnWndProc   = OverlayWndProc;
     wc.lpszClassName = L"RustEspOverlay";
-    RegisterClassEx(&wc);
+    RegisterClassExW(&wc);
 
-    hwnd = CreateWindowEx(
+    hwnd = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT,
         L"RustEspOverlay", L"", WS_POPUP,
         0, 0, 100, 100, nullptr, nullptr, nullptr, nullptr);

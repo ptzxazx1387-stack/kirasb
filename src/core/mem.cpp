@@ -2,19 +2,19 @@
 #include <tlhelp32.h>
 
 bool Mem::attach(const wchar_t* processName) {
-    PROCESSENTRY32 pe{ sizeof(pe) };
+    PROCESSENTRY32W pe{ sizeof(pe) };
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return false;
 
     bool found = false;
-    if (Process32First(snap, &pe)) {
+    if (Process32FirstW(snap, &pe)) {
         do {
             if (_wcsicmp(pe.szExeFile, processName) == 0) {
                 pid = pe.th32ProcessID;
                 found = true;
                 break;
             }
-        } while (Process32Next(snap, &pe));
+        } while (Process32NextW(snap, &pe));
     }
     CloseHandle(snap);
     if (!found) return false;
@@ -24,18 +24,18 @@ bool Mem::attach(const wchar_t* processName) {
 }
 
 uintptr_t Mem::getModuleBase(const wchar_t* moduleName) const {
-    MODULEENTRY32 me{ sizeof(me) };
+    MODULEENTRY32W me{ sizeof(me) };
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid);
     if (snap == INVALID_HANDLE_VALUE) return 0;
 
     uintptr_t base = 0;
-    if (Module32First(snap, &me)) {
+    if (Module32FirstW(snap, &me)) {
         do {
             if (_wcsicmp(me.szModule, moduleName) == 0) {
                 base = (uintptr_t)me.modBaseAddr;
                 break;
             }
-        } while (Module32Next(snap, &me));
+        } while (Module32NextW(snap, &me));
     }
     CloseHandle(snap);
     return base;

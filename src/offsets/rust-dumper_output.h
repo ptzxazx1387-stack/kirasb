@@ -1,7 +1,7 @@
 inline static constexpr uintptr_t il2cpphandle = 0x101CA4E0;
 struct base_networkable
 {
-	inline static constexpr uintptr_t base_networkable = 0xFD36298;
+	inline static constexpr uintptr_t base_address = 0xFD36298;
 	inline static constexpr uintptr_t static_fields = 0xb8;
 	inline static constexpr uintptr_t wrapper_class_ptr = 0x0;
 	inline static constexpr uintptr_t parent_static_fields = 0x10;
@@ -177,7 +177,9 @@ struct convar_graphics
 	inline static constexpr uintptr_t fov = 0x0;
 };
 
-inline uintptr_t decryption::base_networkable_0(uint64_t a1)
+namespace decryption {
+
+inline uintptr_t base_networkable_0(uint64_t a1)
 {
 	std::uintptr_t rax = driver.read<std::uintptr_t>(a1 + 0x18);
 	std::uint32_t* rdx = (std::uint32_t*)&rax;
@@ -200,7 +202,7 @@ inline uintptr_t decryption::base_networkable_0(uint64_t a1)
 	return il2cpp_get_handle(rax);
 }
 
-inline uintptr_t decryption::base_networkable_1(uint64_t a1)
+inline uintptr_t base_networkable_1(uint64_t a1)
 {
 	std::uintptr_t rax = driver.read<std::uintptr_t>(a1 + 0x18);
 	std::uint32_t* rdx = (std::uint32_t*)&rax;
@@ -225,6 +227,8 @@ inline uintptr_t decryption::base_networkable_1(uint64_t a1)
 	} while (r8d);
 	return il2cpp_get_handle(rax);
 }
+
+} // namespace decryption
 
 
 // ===========================================================================
