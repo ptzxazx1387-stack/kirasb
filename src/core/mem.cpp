@@ -23,6 +23,19 @@ bool Mem::attach(const wchar_t* processName) {
     return hProcess != nullptr;
 }
 
+bool Mem::attachByWindowClass(const wchar_t* className) {
+    HWND hw = FindWindowW(className, nullptr);
+    if (!hw) return false;
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hw, &pid);
+    if (!pid) return false;
+
+    this->pid = pid;
+    hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid);
+    return hProcess != nullptr;
+}
+
 uintptr_t Mem::getModuleBase(const wchar_t* moduleName) const {
     MODULEENTRY32W me{ sizeof(me) };
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid);

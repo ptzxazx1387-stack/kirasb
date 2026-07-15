@@ -416,12 +416,15 @@ static void cheatThread() {
 //  Entry
 // ---------------------------------------------------------------------------
 int main() {
-    if (!driver.attach(L"RustClient.exe")) {
-        if (!driver.attach(L"Rust.exe")) {
+    // Your offline fork's executable name - adjust if different.
+    // Fall back to matching the Unity window class so we never have to
+    // know the exact exe name.
+    if (!driver.attach(L"RustClient.exe")
+        && !driver.attach(L"Rust.exe")
+        && !driver.attachByWindowClass(L"UnityWndClass")) {
             MessageBoxW(nullptr, L"Could not find the Rust process.\nLaunch the offline build first.",
                         L"Rust Trainer", MB_OK | MB_ICONERROR);
             return 1;
-        }
     }
 
     g_il2cppBase = driver.getModuleBase(L"GameAssembly.dll");

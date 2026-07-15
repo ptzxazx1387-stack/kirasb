@@ -27,6 +27,10 @@ public:
     DWORD    pid = 0;
 
     bool            attach(const wchar_t* processName);
+    // Attach to the process that owns the given window class
+    // (e.g. "UnityWndClass" for any Unity/Rust build), so we don't
+    // have to know the exact exe name of your offline fork.
+    bool            attachByWindowClass(const wchar_t* className);
     uintptr_t       getModuleBase(const wchar_t* moduleName) const;
 
     template <typename T>
