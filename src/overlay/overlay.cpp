@@ -1,4 +1,5 @@
 #include "overlay.h"
+#include "mem.h"
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
@@ -60,6 +61,7 @@ bool Overlay::init(const OverlaySettings& s) {
     wc.cbSize        = sizeof(WNDCLASSEXW);
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_CLASSDC;
     wc.lpfnWndProc   = OverlayWndProc;
+    wc.hInstance     = g_dllInstance;
     wc.lpszClassName = L"RustEspOverlay";
     if (!RegisterClassExW(&wc)) {
         MessageBoxW(nullptr, L"overlay: RegisterClassExW failed", L"Rust Trainer", MB_OK);

@@ -9,6 +9,11 @@
 // Runtime base of GameAssembly.dll in THIS process, set at cheat start.
 inline uintptr_t g_il2cppBase = 0;
 
+// HINSTANCE of THIS module (the injected DLL). Needed when
+// registering our overlay window class (hInstance must be the DLL,
+// not NULL, or RegisterClassExW fails inside an injected module).
+inline HINSTANCE g_dllInstance = nullptr;
+
 // Translate an il2cpp object handle / RVA coming out of the decryption
 // routine into a real in-process address. The dumper records addresses
 // relative to the il2cpp image; at runtime the image is loaded somewhere

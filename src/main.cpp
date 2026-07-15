@@ -457,6 +457,7 @@ static DWORD WINAPI cheatMain(LPVOID) {
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
+        g_dllInstance = hModule;
         DisableThreadLibraryCalls(hModule);
         CreateThread(nullptr, 0, cheatMain, hModule, 0, nullptr);
     }
