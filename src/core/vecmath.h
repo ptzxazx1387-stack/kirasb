@@ -24,4 +24,8 @@ inline bool worldToScreen(const Vec3& world, Vec2& out,
     return true;
 }
 
+static inline float clampf(float v, float lo, float hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
 #endif // MATH_H
