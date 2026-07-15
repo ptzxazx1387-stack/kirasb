@@ -29,10 +29,20 @@ bool Overlay::createDeviceD3D(HWND hWnd) {
         return false;
     }
 
-    IDXGIFactory2* factory = nullptr;
-    hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory));
-    if (FAILED(hr)) {
-        d3derr(L"CreateDXGIFactory2", hr);
+    // Get the DXGI factory FROM the device (must match the device's adapter,
+    // otherwise CreateSwapChainForHwnd returns DXGI_ERROR_INVALID_CALL).
+    IDXGIDevice*  dxgiDevice = nullptr;
+    IDXGIAdapter* adapter    = nullptr;
+    IDXGIFactory2* factory   = nullptr;
+    hr = pd3dDevice->QueryInterface(IID_PPV_ARGS(&dxgiDevice));
+    if (SUCCEEDED(hr)) {
+        hr = dxgiDevice->GetAdapter(&adapter);
+        if (SUCCEEDED(hr))
+            hr = adapter->GetParent(IID_PPV_ARGS(&factory));
+    }
+    if (!factory) {
+        d3derr(L"GetDXGIFactoryFromDevice", hr);
+        if (dxgiDevice) dxgiDevice->Release();
         pd3dDevice->Release();
         return false;
     }
@@ -47,14 +57,21 @@ bool Overlay::createDeviceD3D(HWND hWnd) {
     sd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     sd.SampleDesc.Count   = 1;
     sd.SampleDesc.Quality = 0;
-    sd.AlphaMode    = DXGI_ALPHA_MODE_PREMULTIPLIED;
 
+    sd.AlphaMode  = DXGI_ALPHA_MODE_PREMULTIPLIED;
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     hr = factory->CreateSwapChainForHwnd(pd3dDevice, hWnd, &sd, nullptr, nullptr, &pSwapChain);
     if (FAILED(hr)) {
+        // bit-blt fallback: premultiplied alpha is not valid here, so use a
+        // color key (black -> transparent) via the layered-window attribute.
+        sd.AlphaMode  = DXGI_ALPHA_MODE_UNSPECIFIED;
         sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
         hr = factory->CreateSwapChainForHwnd(pd3dDevice, hWnd, &sd, nullptr, nullptr, &pSwapChain);
+        if (SUCCEEDED(hr))
+            SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
     }
+    dxgiDevice->Release();
+    adapter->Release();
     factory->Release();
     if (FAILED(hr)) {
         d3derr(L"CreateSwapChainForHwnd", hr);
