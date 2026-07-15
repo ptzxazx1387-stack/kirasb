@@ -118,7 +118,7 @@ bool Overlay::init(const OverlaySettings& s) {
     }
 
     hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT,
+        WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
         L"RustEspOverlay", L"", WS_POPUP,
         0, 0, 100, 100, nullptr, nullptr, nullptr, nullptr);
     if (!hwnd) {
