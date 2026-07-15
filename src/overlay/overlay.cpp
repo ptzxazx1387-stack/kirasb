@@ -13,38 +13,70 @@ static LRESULT CALLBACK OverlayWndProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
 
 static BOOL s_imguiInit = FALSE;
 
+static void d3derr(const wchar_t* step, HRESULT hr) {
+    wchar_t buf[256];
+    swprintf(buf, 256, L"overlay: %ls failed\nHRESULT = 0x%08X", step, (unsigned)hr);
+    MessageBoxW(nullptr, buf, L"Rust Trainer", MB_OK);
+}
+
 bool Overlay::createDeviceD3D(HWND hWnd) {
+    D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0 };
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
+                                   levels, 2, D3D11_SDK_VERSION, &pd3dDevice, nullptr,
+                                   &pd3dDeviceContext);
+    if (FAILED(hr)) {
+        d3derr(L"D3D11CreateDevice", hr);
+        return false;
+    }
+
+    IDXGIFactory2* factory = nullptr;
+    hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory));
+    if (FAILED(hr)) {
+        d3derr(L"CreateDXGIFactory2", hr);
+        pd3dDevice->Release();
+        return false;
+    }
+
+    // Try flip-discard first (best for layered overlays), then fall back to
+    // classic discard (bit-blt) which is more broadly compatible.
     DXGI_SWAP_CHAIN_DESC1 sd{};
     sd.BufferCount  = 2;
     sd.Width        = (width > 0 ? width : 100);
     sd.Height       = (height > 0 ? height : 100);
     sd.Format       = DXGI_FORMAT_B8G8R8A8_UNORM;
     sd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.SampleDesc.Count  = 1;
+    sd.SampleDesc.Count   = 1;
     sd.SampleDesc.Quality = 0;
-    sd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     sd.AlphaMode    = DXGI_ALPHA_MODE_PREMULTIPLIED;
 
-    D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0 };
-    if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
-                                 levels, 2, D3D11_SDK_VERSION, &pd3dDevice, nullptr,
-                                 &pd3dDeviceContext)))
-        return false;
-
-    IDXGIFactory2* factory = nullptr;
-    if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)))) {
+    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    hr = factory->CreateSwapChainForHwnd(pd3dDevice, hWnd, &sd, nullptr, nullptr, &pSwapChain);
+    if (FAILED(hr)) {
+        sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+        hr = factory->CreateSwapChainForHwnd(pd3dDevice, hWnd, &sd, nullptr, nullptr, &pSwapChain);
+    }
+    factory->Release();
+    if (FAILED(hr)) {
+        d3derr(L"CreateSwapChainForHwnd", hr);
         pd3dDevice->Release();
         return false;
     }
-    HRESULT hr = factory->CreateSwapChainForHwnd(pd3dDevice, hWnd, &sd, nullptr, nullptr, &pSwapChain);
-    factory->Release();
-    if (FAILED(hr)) return false;
 
     ID3D11Texture2D* back = nullptr;
-    if (FAILED(pSwapChain->GetBuffer(0, IID_PPV_ARGS(&back)))) return false;
+    hr = pSwapChain->GetBuffer(0, IID_PPV_ARGS(&back));
+    if (FAILED(hr)) {
+        d3derr(L"GetBuffer", hr);
+        pd3dDevice->Release();
+        return false;
+    }
     hr = pd3dDevice->CreateRenderTargetView(back, nullptr, &pRenderTargetView);
     back->Release();
-    return SUCCEEDED(hr);
+    if (FAILED(hr)) {
+        d3derr(L"CreateRenderTargetView", hr);
+        pd3dDevice->Release();
+        return false;
+    }
+    return true;
 }
 
 void Overlay::cleanupDeviceD3D() {
@@ -76,6 +108,7 @@ bool Overlay::init(const OverlaySettings& s) {
         MessageBoxW(nullptr, L"overlay: CreateWindowExW failed", L"Rust Trainer", MB_OK);
         return false;
     }
+    ShowWindow(hwnd, SW_SHOW);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -92,6 +125,16 @@ bool Overlay::init(const OverlaySettings& s) {
     ImGui_ImplDX11_Init(pd3dDevice, pd3dDeviceContext);
     s_imguiInit = TRUE;
     return true;
+}
+
+void Overlay::setMousePassthrough(bool passthrough) {
+    if (!hwnd) return;
+    LONG ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    if (passthrough)
+        ex |= WS_EX_TRANSPARENT;
+    else
+        ex &= ~WS_EX_TRANSPARENT;
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex);
 }
 
 void Overlay::shutdown() {

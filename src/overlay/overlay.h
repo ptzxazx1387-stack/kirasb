@@ -20,6 +20,11 @@ public:
     void shutdown();
     void frame(const std::function<void()>& draw);
 
+    // Toggle click-through. When passthrough is true the mouse falls through
+    // to the game (menu hidden). When false the overlay captures the mouse so
+    // ImGui widgets (menu) are clickable.
+    void setMousePassthrough(bool passthrough);
+
     int width  = 0;
     int height = 0;
 

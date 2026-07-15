@@ -433,9 +433,12 @@ static DWORD WINAPI cheatMain(LPVOID) {
     std::thread cheatThr(cheatThread);
 
     bool menuOpen = true;
+    g_overlay.setMousePassthrough(!menuOpen);   // menu visible -> capture mouse
     while (g_running) {
-        if (GetAsyncKeyState(VK_INSERT) & 1)
+        if (GetAsyncKeyState(VK_INSERT) & 1) {
             menuOpen = !menuOpen;
+            g_overlay.setMousePassthrough(!menuOpen);
+        }
         if (GetAsyncKeyState(VK_END) & 1) {
             g_running = false;
             break;
