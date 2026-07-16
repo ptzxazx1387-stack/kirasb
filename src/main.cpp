@@ -60,7 +60,7 @@ static bool     g_running = true;
 // ---------------------------------------------------------------------------
 static uintptr_t getLocalPlayer() {
     // First try via camera
-    const uintptr_t camStatic = g_il2cppBase + camera::main_camera_c;
+    const uintptr_t camStatic = camera::main_camera_c;
     const uintptr_t sfields   = camStatic + camera::camera_static;
     const uintptr_t camObj    = driver.read<uintptr_t>(sfields + camera::camera_object);
     if (camObj) {
@@ -68,7 +68,7 @@ static uintptr_t getLocalPlayer() {
         if (entity) return entity;
     }
     // Fallback: scan entity list for a player with empty display name (local)
-    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_address;
+    const uintptr_t staticClass = base_networkable::base_address;
     const uintptr_t listStatic  = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
     const uintptr_t entitiesList = driver.read<uintptr_t>(listStatic + base_networkable::entities);
     if (!entitiesList) return 0;
@@ -94,98 +94,13 @@ static uintptr_t getLocalPlayer() {
 }
 
 // ---------------------------------------------------------------------------
-//  Item struct for item ESP
-// ---------------------------------------------------------------------------
-struct ItemESP {
-    Vec3       position;
-    std::string shortName;
-    float      distance = 0.f;
-    bool       valuable = false;
-};
-
-// Gather items (WorldItem / DroppedItem)
-static std::vector<ItemESP> gatherItems(const Vec3& camPos) {
-    std::vector<ItemESP> out;
-    if (!g_il2cppBase) return out;
-
-    const uintptr_t staticClass = g_il2cppBase + base_networkable::base_address;
-    const uintptr_t sfields     = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
-    if (!sfields) return out;
-    const uintptr_t entitiesList = driver.read<uintptr_t>(sfields + base_networkable::entities);
-    if (!entitiesList) return out;
-    const uintptr_t buffer = driver.read<uintptr_t>(entitiesList + 0x10);
-    const int       count  = driver.read<int>(entitiesList + 0x18);
-    if (!buffer || count <= 0 || count > 20000) return out;
-
-    for (int i = 0; i < count; ++i) {
-        const uintptr_t handle = driver.read<uintptr_t>(buffer + 0x20 + (uintptr_t)i * 8);
-        if (!handle) continue;
-        const uintptr_t obj = decryption::base_networkable_0(handle);
-        if (!obj) continue;
-
-        uintptr_t klass = driver.read<uintptr_t>(obj);
-        if (!klass) continue;
-        uintptr_t cnPtr = driver.read<uintptr_t>(klass + 0x10);
-        if (!cnPtr) continue;
-        std::string cn = driver.readString(cnPtr);
-        if (cn != "WorldItem" && cn != "DroppedItem") continue;
-
-        // Read the Item object from WorldItem.item @0x1F8
-        uintptr_t itemObj = driver.read<uintptr_t>(obj + world_item::item);
-        if (!itemObj) continue;
-
-        uintptr_t def = driver.read<uintptr_t>(itemObj + item::definition);
-        if (!def) continue;
-
-        uintptr_t snPtr = driver.read<uintptr_t>(def + item_definition::shortname);
-        std::string shortName = driver.readString(snPtr);
-        if (shortName.empty()) continue;
-
-        // Position: use model rootBone or a fixed offset
-        Vec3 pos{};
-        uintptr_t modelAddr = driver.read<uintptr_t>(obj + base_combat_entity::model);
-        if (modelAddr) {
-            uintptr_t rootBone = driver.read<uintptr_t>(modelAddr + model::rootBone);
-            if (rootBone) pos = driver.read<Vec3>(rootBone + 0x90); // transform position
-        }
-        if (pos.x == 0 && pos.y == 0 && pos.z == 0) continue;
-
-        const float dx = pos.x - camPos.x;
-        const float dy = pos.y - camPos.y;
-        const float dz = pos.z - camPos.z;
-        const float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-
-        // Determine if valuable
-        bool valuable = false;
-        std::string lower = shortName;
-        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-        static const char* valuable_keywords[] = {
-            "rifle", "pistol", "shotgun", "ammo", "metal", "sulfur",
-            "explosive", "c4", "rocket", "ak47", "bolt", "l96",
-            "python", "lr300", "m249", "hmlmg", "semi"
-        };
-        for (const char* kw : valuable_keywords) {
-            if (lower.find(kw) != std::string::npos) { valuable = true; break; }
-        }
-
-        ItemESP item;
-        item.position  = pos;
-        item.shortName = shortName;
-        item.distance  = dist;
-        item.valuable  = valuable;
-        out.push_back(item);
-    }
-    return out;
-}
-
-// ---------------------------------------------------------------------------
 //  ESP drawing
 // ---------------------------------------------------------------------------
 static void drawESP() {
     if (!g_settings.esp && !g_settings.debugAll) return;
     if (!g_il2cppBase) return;
 
-    const uintptr_t camStatic = g_il2cppBase + camera::main_camera_c;
+    const uintptr_t camStatic = camera::main_camera_c;
     const uintptr_t sfields   = camStatic + camera::camera_static;
     const uintptr_t camObj    = driver.read<uintptr_t>(sfields + camera::camera_object);
     if (!camObj) return;
@@ -202,35 +117,50 @@ static void drawESP() {
 
     // ---- Items ----
     if (g_settings.showItems && !g_settings.debugAll) {
-        for (const ItemESP& item : gatherItems(cam)) {
+        for (const EntityESP& item : gatherItems(cam)) {
             if (item.distance > g_settings.espMaxDist) continue;
             Vec2 screen;
             if (!worldToScreen(item.position, screen, vm, (int)res.x, (int)res.y)) continue;
 
-            ImU32 col = item.valuable
+            ImU32 col = item.name.find("rifle") != std::string::npos ||
+                          item.name.find("pistol") != std::string::npos ||
+                          item.name.find("shotgun") != std::string::npos ||
+                          item.name.find("ammo") != std::string::npos ||
+                          item.name.find("rocket") != std::string::npos ||
+                          item.name.find("ak47") != std::string::npos ||
+                          item.name.find("bolt") != std::string::npos ||
+                          item.name.find("l96") != std::string::npos ||
+                          item.name.find("python") != std::string::npos ||
+                          item.name.find("lr300") != std::string::npos ||
+                          item.name.find("m249") != std::string::npos ||
+                          item.name.find("hmlmg") != std::string::npos ||
+                          item.name.find("semi") != std::string::npos ||
+                          item.name.find("c4") != std::string::npos ||
+                          item.name.find("explosive") != std::string::npos ||
+                          item.name.find("metal") != std::string::npos ||
+                          item.name.find("sulfur") != std::string::npos
                 ? IM_COL32(255, 50, 50, 255)
                 : IM_COL32(255, 255, 100, 220);
 
-            draw->AddText({ screen.x, screen.y }, col, item.shortName.c_str());
+            draw->AddText({ screen.x, screen.y }, col, item.name.c_str());
             char distBuf[32];
             snprintf(distBuf, sizeof(distBuf), "%.0fm", item.distance);
             draw->AddText({ screen.x, screen.y + 14 }, IM_COL32(200, 200, 200, 200), distBuf);
 
-            if (item.valuable) {
+            if (col == IM_COL32(255, 50, 50, 255)) {
                 draw->AddCircle({ screen.x, screen.y }, 6, col, 0, 2.0f);
             }
         }
     }
 
-    // ---- Players ----
+    // ---- Players + NPCs + bots (everything with a position) ----
     for (const EntityESP& p : gatherEntities(cam)) {
         if (p.object == localPlayer) continue;
-        if (!g_settings.debugAll && !p.isPlayer) continue;
 
         Vec2 screen;
         if (!worldToScreen(p.position, screen, vm, (int)res.x, (int)res.y)) continue;
 
-        // Skip unless we're in debug mode
+        // Debug mode: draw a yellow box + class name for EVERYTHING.
         if (g_settings.debugAll) {
             const float h = clampf(2000.0f / (p.distance + 1.0f), 30.0f, 320.0f);
             const float w = h * 0.5f;
@@ -242,11 +172,14 @@ static void drawESP() {
             continue;
         }
 
-        // Skip NPCs/animals without a proper name
-        if (!p.isPlayer) continue;
-
-        const bool teammate = (localTeam != 0 && p.team == localTeam);
-        ImVec4 col = teammate ? g_settings.teamColor : g_settings.boxColor;
+        // Normal mode: draw every entity that resolved a world position.
+        // Players = red/green, bots/NPCs/animals = cyan.
+        const bool teammate = (localTeam != 0 && p.team == localTeam && p.isPlayer);
+        ImVec4 col;
+        if (p.isPlayer)
+            col = teammate ? g_settings.teamColor : g_settings.boxColor;
+        else
+            col = ImVec4(0.2f, 0.9f, 1.0f, 1.0f);
 
         const float h = clampf(2000.0f / (p.distance + 1.0f), 20.0f, 320.0f);
         const float w = h * 0.5f;
@@ -260,10 +193,14 @@ static void drawESP() {
         draw->AddRect(topLeft, botRight,
                       IM_COL32((int)(col.x*255), (int)(col.y*255), (int)(col.z*255), 255));
 
-        if (g_settings.showName)
-            draw->AddText({ topLeft.x, topLeft.y - 14 }, IM_COL32(255, 255, 255, 255), p.name.c_str());
+        const char* label = p.name.c_str();
+        if (!p.isPlayer)
+            label = (p.className.empty() ? "BOT/NPC" : p.className.c_str());
 
-        if (g_settings.showHealth && p.maxHealth > 0.f) {
+        if (g_settings.showName)
+            draw->AddText({ topLeft.x, topLeft.y - 14 }, IM_COL32(255, 255, 255, 255), label);
+
+        if (p.isPlayer && g_settings.showHealth && p.maxHealth > 0.f) {
             const float frac = clampf(p.health / p.maxHealth, 0.f, 1.f);
             const ImVec2 hb0(topLeft.x - 6, botRight.y - (h * frac));
             const ImVec2 hb1(topLeft.x - 2, botRight.y);
@@ -283,12 +220,23 @@ static void drawESP() {
 //  UI
 // ---------------------------------------------------------------------------
 static void drawMenu() {
-    if (!ImGui::Begin("Rust Trainer", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 4));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg,    ImVec4(0.09f, 0.10f, 0.13f, 0.94f));
+    ImGui::PushStyleColor(ImGuiCol_TitleBg,      ImVec4(0.15f, 0.45f, 0.85f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(0.20f, 0.55f, 1.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header,       ImVec4(0.20f, 0.40f, 0.70f, 0.60f));
+    ImGui::PushStyleColor(ImGuiCol_CheckMark,    ImVec4(0.30f, 0.95f, 0.55f, 1.0f));
+
+    if (!ImGui::Begin("HKazem | Right Cheat", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
+        ImGui::PopStyleColor(5);
+        ImGui::PopStyleVar(2);
         return;
     }
+
     if (ImGui::CollapsingHeader("ESP", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Checkbox("Player ESP", &g_settings.esp);
+        ImGui::Checkbox("Player / Bot ESP", &g_settings.esp);
         ImGui::Checkbox("Show Name", &g_settings.showName);
         ImGui::Checkbox("Show Health", &g_settings.showHealth);
         ImGui::Checkbox("Show Distance", &g_settings.showDistance);
@@ -315,7 +263,10 @@ static void drawMenu() {
     ImGui::Checkbox("Debug: show all entities", &g_settings.debugAll);
     ImGui::Text("Insert = toggle menu");
     ImGui::Text("il2cpp base: 0x%llX", (unsigned long long)g_il2cppBase);
+
     ImGui::End();
+    ImGui::PopStyleColor(5);
+    ImGui::PopStyleVar(2);
 }
 
 // ---------------------------------------------------------------------------
@@ -402,7 +353,7 @@ static void cheatThread() {
 
         if (g_settings.wallhack) {
             // Set camera culling mask to show everything
-            const uintptr_t camStatic = g_il2cppBase + camera::main_camera_c;
+            const uintptr_t camStatic = camera::main_camera_c;
             const uintptr_t camSfields = camStatic + camera::camera_static;
             const uintptr_t camObj = driver.read<uintptr_t>(camSfields + camera::camera_object);
             if (camObj) {
@@ -420,6 +371,9 @@ static void cheatThread() {
 static DWORD WINAPI cheatMain(LPVOID) {
     while (!(g_il2cppBase = driver.getModuleBase(L"GameAssembly.dll")))
         Sleep(500);
+
+    // Resolve all il2cpp class bases at runtime (no more hard-coded RVAs).
+    resolveClasses();
 
     if (!g_overlay.init()) {
         MessageBoxW(nullptr, L"Failed to hook Present.", L"Rust Trainer", MB_OK | MB_ICONERROR);
