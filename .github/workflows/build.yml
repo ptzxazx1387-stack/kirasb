@@ -3,11 +3,12 @@ name: Build Rust Trainer
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # needed to create releases
 
 jobs:
   build:
@@ -16,8 +17,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Find the folder that actually contains CMakeLists.txt
-      # (works whether you init the repo at rust-trainer/ or one level up).
+      # Locate the folder that contains CMakeLists.txt
+      # (handles both "rust-trainer/" and repo-root layouts).
       - name: Locate project
         id: proj
         shell: bash
@@ -30,8 +31,19 @@ jobs:
       - name: Build (Release)
         run: cmake --build build --config Release
 
-      - name: Upload artifact
+      - name: Upload artifact (always)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rust-trainer
+          name: rust-trainer-dll
           path: build/Release/rust_trainer.dll
+          if-no-files-found: warn
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Release/rust_trainer.dll
+          name: Rust Trainer ${{ github.ref_name }}
+          draft: false
+          prerelease: false
