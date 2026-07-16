@@ -9,9 +9,6 @@
 #include "il2cpp_api.h"
 #include "mem.h"
 
-// il2cpp module handle (runtime base of GameAssembly.dll)
-inline uintptr_t g_il2cppBase = 0;
-
 // ---------------------------------------------------------------------------
 //  Class "addresses" are now resolved at runtime. We keep the same struct
 //  shape the rest of the code expects, but the base is filled in by

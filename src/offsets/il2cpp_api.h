@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <windows.h>
+#include <psapi.h>
 
 // ---- il2cpp C API (subset we use) ----------------------------------------
 extern "C" {
@@ -72,6 +73,7 @@ private:
     uintptr_t resolveViaApi(const char* name) {
         HMODULE mod = GetModuleHandleW(L"GameAssembly.dll");
         if (!mod) return 0;
+        uintptr_t result = 0;
 
         auto pDomainGet     = (Il2CppDomain*      (*)())                GetProcAddress(mod, "il2cpp_domain_get");
         auto pGetAssemblies = (int                 (*)(Il2CppDomain*, Il2CppAssembly***)) GetProcAddress(mod, "il2cpp_domain_get_assemblies");

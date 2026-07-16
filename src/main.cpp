@@ -174,9 +174,9 @@ static void drawESP() {
 
         // Normal mode: draw every entity that resolved a world position.
         // Players = red/green, bots/NPCs/animals = cyan.
-        const bool teammate = (localTeam != 0 && p.team == localTeam && p.isPlayer);
+        const bool teammate = (localTeam != 0 && p.team == localTeam && (p.type == EntityType::Player));
         ImVec4 col;
-        if (p.isPlayer)
+        if ((p.type == EntityType::Player))
             col = teammate ? g_settings.teamColor : g_settings.boxColor;
         else
             col = ImVec4(0.2f, 0.9f, 1.0f, 1.0f);
@@ -194,13 +194,13 @@ static void drawESP() {
                       IM_COL32((int)(col.x*255), (int)(col.y*255), (int)(col.z*255), 255));
 
         const char* label = p.name.c_str();
-        if (!p.isPlayer)
+        if (!(p.type == EntityType::Player))
             label = (p.className.empty() ? "BOT/NPC" : p.className.c_str());
 
         if (g_settings.showName)
             draw->AddText({ topLeft.x, topLeft.y - 14 }, IM_COL32(255, 255, 255, 255), label);
 
-        if (p.isPlayer && g_settings.showHealth && p.maxHealth > 0.f) {
+        if ((p.type == EntityType::Player) && g_settings.showHealth && p.maxHealth > 0.f) {
             const float frac = clampf(p.health / p.maxHealth, 0.f, 1.f);
             const ImVec2 hb0(topLeft.x - 6, botRight.y - (h * frac));
             const ImVec2 hb1(topLeft.x - 2, botRight.y);

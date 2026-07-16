@@ -59,4 +59,4 @@ target_include_directories(rust_trainer PRIVATE
     src/offsets
 )
 
-target_link_libraries(rust_trainer PRIVATE imgui d3d11 dxgi)
+target_link_libraries(rust_trainer PRIVATE imgui d3d11 dxgi psapi)
