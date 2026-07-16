@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
+#include "dbglog.h"
 
 #include <cstdint>
 
@@ -23,7 +24,7 @@ HRESULT STDMETHODCALLTYPE Overlay::hkPresent(IDXGISwapChain* p, UINT SyncInterva
 
 bool Overlay::init() {
     s_inst = this;
-
+    dbglog("[*] Overlay::init() start");
     // ---- Build a throw-away device + swap chain just to grab the vtable ----
     WNDCLASSEXW wc{};
     wc.cbSize        = sizeof(WNDCLASSEXW);
@@ -119,6 +120,7 @@ void Overlay::resize(IDXGISwapChain* p) {
 
 void Overlay::onPresent(IDXGISwapChain* p, UINT, UINT) {
     if (!p) return;
+    if (!m_inited) dbglog("[*] onPresent (first call) -> ensureInit");
     ensureInit(p);
     if (!m_inited || p != m_mainSwapChain) return;
 

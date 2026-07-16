@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <windows.h>
 #include <psapi.h>
+#include "dbglog.h"
 
 // ---- il2cpp C API (subset we use) ----------------------------------------
 extern "C" {
@@ -57,8 +58,13 @@ struct Il2CppResolver {
         auto it = m_cache.find(name);
         if (it != m_cache.end()) return it->second;
 
+        dbglog("[*] findClass('%s')...", name);
         uintptr_t result = resolveViaApi(name);
-        if (!result) result = resolveViaScan(name);
+        if (!result) {
+            dbglog("[!]   resolveViaApi failed for '%s', trying scan", name);
+            result = resolveViaScan(name);
+        }
+        dbglog("[*] findClass('%s') -> 0x%llX", name, (unsigned long long)result);
         m_cache[name] = result;
         return result;
     }
@@ -83,12 +89,16 @@ private:
         auto pGetClassName  = (const char*         (*)(Il2CppClass*))     GetProcAddress(mod, "il2cpp_class_get_name");
         auto pGetClassNs   = (const char*         (*)(Il2CppClass*))     GetProcAddress(mod, "il2cpp_class_get_namespace");
         if (!(pDomainGet && pGetAssemblies && pGetImage && pGetClassCount &&
-              pGetClass && pGetClassName && pGetClassNs))
+              pGetClass && pGetClassName && pGetClassNs)) {
+            dbglog("[!]   resolveViaApi: missing il2cpp exports");
             return 0;
+        }
 
+        dbglog("[*]   resolveViaApi: exports OK, walking classes...");
         Il2CppDomain* domain = pDomainGet();
         Il2CppAssembly** asms = nullptr;
         int nasm = pGetAssemblies(domain, &asms);
+        dbglog("[*]   resolveViaApi: %d assemblies", nasm);
         for (int a = 0; a < nasm && !result; ++a) {
             Il2CppImage* img = pGetImage(asms[a]);
             if (!img) continue;

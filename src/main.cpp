@@ -18,6 +18,7 @@
 #include "esp.h"
 #include "overlay.h"
 #include "imgui.h"
+#include "dbglog.h"
 
 #include <thread>
 #include <chrono>
@@ -369,16 +370,26 @@ static void cheatThread() {
 //  to be loaded, then run the overlay + cheat loop on a detached thread.
 // ---------------------------------------------------------------------------
 static DWORD WINAPI cheatMain(LPVOID) {
+    dbglog("[*] cheatMain started, waiting for GameAssembly.dll...");
+
     while (!(g_il2cppBase = driver.getModuleBase(L"GameAssembly.dll")))
         Sleep(500);
+
+    dbglog("[*] GameAssembly.dll base = 0x%llX", (unsigned long long)g_il2cppBase);
 
     // Resolve all il2cpp class bases at runtime (no more hard-coded RVAs).
     resolveClasses();
 
+    dbglog("[*] resolveClasses done: BaseNetworkable=0x%llX Camera=0x%llX",
+        (unsigned long long)base_networkable::base_address,
+        (unsigned long long)camera::main_camera_c);
+
     if (!g_overlay.init()) {
+        dbglog("[!] overlay init FAILED");
         MessageBoxW(nullptr, L"Failed to hook Present.", L"Rust Trainer", MB_OK | MB_ICONERROR);
         return 1;
     }
+    dbglog("[*] overlay init OK");
 
     g_overlay.setDraw([]() {
         if (g_overlay.isMenuOpen()) drawMenu();
@@ -403,7 +414,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_dllInstance = hModule;
         DisableThreadLibraryCalls(hModule);
-        CreateThread(nullptr, 0, cheatMain, hModule, 0, nullptr);
+        // Spawn on a fresh thread so we don't do work under the loader lock.
+        CloseHandle(CreateThread(nullptr, 0, cheatMain, hModule, 0, nullptr));
     }
     return TRUE;
 }
