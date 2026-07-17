@@ -26,9 +26,6 @@ static Settings g_settings;
 static Overlay g_overlay;
 static bool g_running = true;
 
-// ---------------------------------------------------------------------------
-//  getLocalPlayer: use camera chain (main_camera + 0xB8 -> +0x8 -> +0x10)
-// ---------------------------------------------------------------------------
 static uintptr_t getLocalPlayer() {
     if (!main_camera::base_address) return 0;
 
@@ -51,9 +48,6 @@ static uintptr_t getLocalPlayer() {
     return entity;
 }
 
-// ---------------------------------------------------------------------------
-//  drawESP
-// ---------------------------------------------------------------------------
 static void drawESP() {
     if (!g_settings.esp || !g_il2cppBase) return;
 
@@ -102,9 +96,6 @@ static void drawESP() {
     }
 }
 
-// ---------------------------------------------------------------------------
-//  drawMenu
-// ---------------------------------------------------------------------------
 static void drawMenu() {
     ImGui::Begin("Rust Trainer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -145,9 +136,6 @@ static void drawMenu() {
     ImGui::End();
 }
 
-// ---------------------------------------------------------------------------
-//  cheatThread: applies No Recoil and No Spread
-// ---------------------------------------------------------------------------
 static void cheatThread() {
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -159,7 +147,6 @@ static void cheatThread() {
         if (g_settings.noRecoil) {
             uintptr_t active = driver.read<uintptr_t>(local + base_player::clActiveItem);
             if (active) {
-                // Item::heldEntity = 0x80 (new dumper)
                 uintptr_t held = driver.read<uintptr_t>(active + item::heldEntity);
                 if (held) {
                     uintptr_t recoil = driver.read<uintptr_t>(held + base_projectile::recoil);
@@ -186,9 +173,6 @@ static void cheatThread() {
     }
 }
 
-// ---------------------------------------------------------------------------
-//  cheatMain: entry point for the cheat thread
-// ---------------------------------------------------------------------------
 static DWORD WINAPI cheatMain(LPVOID) {
     dbglog("[*] Waiting for GameAssembly.dll...");
     while (!(g_il2cppBase = (uintptr_t)GetModuleHandleW(L"GameAssembly.dll"))) Sleep(500);
@@ -218,9 +202,6 @@ static DWORD WINAPI cheatMain(LPVOID) {
     return 0;
 }
 
-// ---------------------------------------------------------------------------
-//  DllMain
-// ---------------------------------------------------------------------------
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_dllInstance = hModule;
