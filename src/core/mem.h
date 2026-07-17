@@ -6,6 +6,7 @@
 #include <string>
 #include <cstring>
 #include <intrin.h>
+#include "dbglog.h"   // برای dbglog
 
 // ===========================================================================
 //  متغیرهای سراسری
@@ -76,61 +77,9 @@ public:
 inline Mem driver;
 
 // ===========================================================================
-//  تبدیل handle به آدرس واقعی (روش جایگزین بدون il2cpp_gchandle_get_target)
-// ===========================================================================
-inline uintptr_t resolve_tagged_handle(uint64_t decrypted) {
-    if (!decrypted) {
-        dbglog("[!] resolve_tagged_handle: decrypted is 0");
-        return 0;
-    }
-
-    if (decrypted & 1) {
-        uint32_t idx = (uint32_t)decrypted;
-        if (idx == 0 || idx > 0x1000000) {
-            dbglog("[!] resolve_tagged_handle: invalid idx %u", idx);
-            return 0;
-        }
-
-        static uintptr_t gc_handle_table = 0;
-        if (!gc_handle_table) {
-            gc_handle_table = g_il2cppBase + 0x1017C260;
-            dbglog("[*] resolve_tagged_handle: gc_handle_table = 0x%llX", (unsigned long long)gc_handle_table);
-        }
-
-        uintptr_t target = driver.read<uintptr_t>(gc_handle_table + (uintptr_t)idx * 8);
-        dbglog("[*] resolve_tagged_handle: idx=%u -> target=0x%llX", idx, (unsigned long long)target);
-        return target;
-    }
-
-    dbglog("[*] resolve_tagged_handle: direct pointer 0x%llX", (unsigned long long)decrypted);
-    return (uintptr_t)decrypted;
-}
-
-// ===========================================================================
-//  حل کننده il2cpp_gchandle_get_target با دو RVA احتمالی (فال‌بک)
+//  حل کننده il2cpp_gchandle_get_target (فال‌بک - دیگر استفاده نمی‌شود)
 // ===========================================================================
 inline uintptr_t il2cpp_gchandle_get_target(uintptr_t handle) {
     if (!handle || !g_il2cppBase) return 0;
-
-    static const uintptr_t rva_candidates[] = { 0x8365E0, 0x7D6AD0 };
-    static uintptr_t fn = 0;
-
-    if (!fn) {
-        for (int i = 0; i < 2; ++i) {
-            uintptr_t addr = g_il2cppBase + rva_candidates[i];
-            __try {
-                uint8_t first_byte = *(uint8_t*)addr;
-                if (first_byte == 0x48 || first_byte == 0xE9) {
-                    fn = addr;
-                    break;
-                }
-            } __except (EXCEPTION_EXECUTE_HANDLER) {
-                continue;
-            }
-        }
-        if (!fn) fn = g_il2cppBase + 0x8365E0;
-    }
-
-    using Fn = uintptr_t(*)(uintptr_t);
-    return ((Fn)fn)(handle);
+    return 0;  // از resolve_tagged_handle استفاده کنید
 }
