@@ -32,8 +32,8 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     uintptr_t handle = decryption::client_entities(wrapper);
     if (!handle) return out;
 
-    // 5. handle -> BufferList object
-    uintptr_t entityList = il2cpp_gchandle_get_target(handle);
+    // 5. handle -> BufferList object (با روش جدید resolve_tagged_handle)
+    uintptr_t entityList = resolve_tagged_handle(handle);
     if (!entityList) return out;
 
     // 6. buffer and count
