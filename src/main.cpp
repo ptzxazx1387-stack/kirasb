@@ -313,7 +313,6 @@ static void drawMenu() {
                 float hp = driver.read<float>(local + base_combat_entity::_health);
                 ImGui::Text("Local team=%llu health=%.1f", (unsigned long long)team, hp);
             }
-            }
         }
     }
 

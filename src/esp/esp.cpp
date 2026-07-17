@@ -80,7 +80,7 @@ static std::string getDisplayName(uintptr_t obj, EntityType type) {
     if (type == EntityType::Item) {
         uintptr_t itemObj = driver.read<uintptr_t>(obj + offsets::world_item::item);
         if (!itemObj) return "Item";
-        uintptr_t def = driver.read<uintptr_t>(itemObj + offsets::item::definition);
+        uintptr_t def = driver.read<uintptr_t>(itemObj + offsets::item::itemdefinition);
         if (!def) return "Item";
         uintptr_t snPtr = driver.read<uintptr_t>(def + offsets::item_definition::shortname);
         return driver.readString(snPtr);
