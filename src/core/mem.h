@@ -9,32 +9,51 @@
 // Runtime base of GameAssembly.dll in THIS process, set at cheat start.
 inline uintptr_t g_il2cppBase = 0;
 
-// HINSTANCE of THIS module (the injected DLL). Needed when
-// registering our overlay window class (hInstance must be the DLL,
-// not NULL, or RegisterClassExW fails inside an injected module).
+// HINSTANCE of THIS module (the injected DLL).
 inline HINSTANCE g_dllInstance = nullptr;
 
-// Translate an il2cpp object handle / RVA coming out of the decryption
-// routine into a real in-process address. The dumper records addresses
-// relative to the il2cpp image; at runtime the image is loaded somewhere
-// else, so an RVA must be rebased. If the value already looks like a
-// full user-mode pointer we return it as-is.
-inline uintptr_t il2cpp_get_handle(uintptr_t addr) {
-    if (!addr) return 0;
-    if (addr > 0x100000000ULL) return addr;       // already absolute
-    return g_il2cppBase + addr;                    // RVA relative to il2cpp image
+// ---------------------------------------------------------------------------
+//  REAL il2cpp_gchandle_get_target - calls the actual function inside
+//  GameAssembly.dll using the RVA recorded by the dumper.
+// ---------------------------------------------------------------------------
+inline uintptr_t il2cpp_gchandle_get_target(uintptr_t handle) {
+    if (!handle || !g_il2cppBase) return 0;
+
+    // RVA of il2cpp_gchandle_get_target from the dump (0x8365E0)
+    static uintptr_t fn = 0;
+    if (!fn) {
+        fn = g_il2cppBase + 0x8365E0;
+    }
+
+    using Fn = uintptr_t(*)(uintptr_t);
+    return ((Fn)fn)(handle);
 }
 
-// Internal cheat memory access: we run INSIDE the target process, so
-// reads/writes are plain pointer dereferences of game memory. They are
-// guarded with SEH so a wrong offset / invalid pointer does NOT crash the
-// game (it just yields 0 / fails). This is essential for an internal cheat
-// where a bad read would otherwise raise an access violation in RustClient.
+// ---------------------------------------------------------------------------
+//  Memory access class - SEH-guarded reads/writes directly inside the game
+//  process (we are running internally, so no driver needed).
+// ---------------------------------------------------------------------------
 class Mem {
 public:
-    // Raw, SEH-guarded byte copy. Returns false on any access violation.
-    bool tryRead(uintptr_t addr, void* buf, size_t sz) const;
-    bool tryWrite(uintptr_t addr, const void* buf, size_t sz) const;
+    bool tryRead(uintptr_t addr, void* buf, size_t sz) const {
+        if (!addr || !buf || sz == 0) return false;
+        __try {
+            memcpy(buf, (const void*)addr, sz);
+            return true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    bool tryWrite(uintptr_t addr, const void* buf, size_t sz) const {
+        if (!addr || !buf || sz == 0) return false;
+        __try {
+            memcpy((void*)addr, buf, sz);
+            return true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
 
     template <typename T>
     T read(uintptr_t addr) const {
@@ -48,7 +67,6 @@ public:
         return tryWrite(addr, &val, sizeof(T));
     }
 
-    // Follow a pointer chain: *(*(base + o0) + o1) + ...
     uintptr_t readChain(uintptr_t base, const std::vector<uintptr_t>& offsets) const {
         uintptr_t addr = base;
         for (uintptr_t o : offsets) {
@@ -58,16 +76,27 @@ public:
         return addr;
     }
 
-    // Base of a module loaded in THIS process (e.g. "GameAssembly.dll").
     uintptr_t getModuleBase(const wchar_t* moduleName) const {
         return (uintptr_t)GetModuleHandleW(moduleName);
     }
 
     // Read a Unity / il2cpp System.String from in-process memory.
     // Layout: [object header 0x10][int32 length @0x10][wchar firstChar @0x14]
-    std::string readString(uintptr_t addr) const;
+    std::string readString(uintptr_t addr) const {
+        if (!addr) return "";
+        int32_t len = 0;
+        if (!tryRead(addr + 0x10, &len, sizeof(len))) return "";
+        if (len <= 0 || len > 4096) return "";
+        std::wstring ws((size_t)len, L'\0');
+        if (!tryRead(addr + 0x14, ws.data(), (size_t)len * sizeof(wchar_t))) return "";
+        int sz = WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), len, nullptr, 0, nullptr, nullptr);
+        if (sz <= 0) return "";
+        std::string out((size_t)sz, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), len, out.data(), sz, nullptr, nullptr);
+        return out;
+    }
 };
 
 // Global memory object so the offset header's decryption functions
-// (which call `driver.read<...>()`) compile unchanged.
+// (which call `driver.read<...>()` compile unchanged.
 inline Mem driver;

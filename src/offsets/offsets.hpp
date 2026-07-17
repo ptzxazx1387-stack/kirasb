@@ -22,14 +22,11 @@ namespace offsets {
         inline constexpr uintptr_t net = 0x80;
         inline constexpr uintptr_t globalBroadcast = 0x58;
         inline constexpr uintptr_t networkRange = 0x64;
-
-        // entity list traversal (from dump: buffer_list_array / buffer_list_size)
         inline constexpr uintptr_t buffer_list_array = 0x10;
         inline constexpr uintptr_t buffer_list_size = 0x18;
         inline constexpr uintptr_t client_entities_decryption = 0x103E210;
         inline constexpr uintptr_t entity_list_wrapper = 0x29AB770;
         inline constexpr uintptr_t entity_list_decryption = 0x29BFEA0;
-
         inline constexpr uintptr_t basenetworkable_ti = 0xFCD2240;
         inline constexpr uintptr_t baseentity_ti = 0xFD2C2B8;
         inline constexpr uintptr_t basecombatentity_ti = 0xFD4F2F0;
@@ -127,6 +124,7 @@ namespace offsets {
         inline constexpr uintptr_t shortname = 0x28;
         inline constexpr uintptr_t category = 0x58;
         inline constexpr uintptr_t HeldEntity = 0x58;
+        inline constexpr uintptr_t held_entity = 0x58;
     }
 
     // ItemDefinition
@@ -177,6 +175,7 @@ namespace offsets {
         inline constexpr uintptr_t internalBurstAimConeScale = 0x434;
         inline constexpr uintptr_t gravity_modifier = 0x38;
         inline constexpr uintptr_t drag = 0x34;
+        inline constexpr uintptr_t string_hold_duration_max = 0x4C0;
     }
 
     // RecoilProperties
@@ -317,6 +316,7 @@ namespace offsets {
         inline constexpr uintptr_t jumping = 0x1FC;
         inline constexpr uintptr_t wasJumping = 0x204;
         inline constexpr uintptr_t falling = 0x20C;
+        inline constexpr uintptr_t TargetMovement = 0x128;
     }
 
     // ModelState

@@ -3,10 +3,8 @@
 //  Dump generated on: 2026-07-17 01:35:05 PM UTC+3
 //  Field offsets below are taken verbatim from checkTHIS_AI.md.
 //  Class bases (BaseNetworkable / Camera / Client) are resolved at runtime
-//  via il2cpp_* exports, using the typeinfo RVAs from the dump as a
-//  fallback scan target.
+//  via RVA rebasing, using the typeinfo RVAs from the dump.
 // ===========================================================================
-#include "il2cpp_api.h"
 #include "mem.h"
 #include <cstdint>
 
@@ -154,13 +152,37 @@ struct model
     inline static uintptr_t eyeBone        = 0x38;
     inline static uintptr_t boneTransforms = 0x50;
     inline static uintptr_t boneNames      = 0x58;
+    inline static uintptr_t bone_transform = 0x50;
+    // bone indices
+    inline static uintptr_t pelvis_bone_idx     = 0x0;
+    inline static uintptr_t l_hip_bone_idx      = 0x1;
+    inline static uintptr_t l_knee_bone_idx     = 0x3;
+    inline static uintptr_t l_foot_bone_idx     = 0x4;
+    inline static uintptr_t r_hip_bone_idx      = 0xE;
+    inline static uintptr_t r_knee_bone_idx     = 0x10;
+    inline static uintptr_t r_foot_bone_idx     = 0x11;
+    inline static uintptr_t spine2_bone_idx     = 0x15;
+    inline static uintptr_t spine4_bone_idx     = 0x17;
+    inline static uintptr_t l_clavicle_bone_idx = 0x18;
+    inline static uintptr_t l_upperarm_bone_idx = 0x19;
+    inline static uintptr_t l_forearm_bone_idx  = 0x1A;
+    inline static uintptr_t l_hand_bone_idx     = 0x1D;
+    inline static uintptr_t r_clavicle_bone_idx = 0x3C;
+    inline static uintptr_t r_upperarm_bone_idx = 0x3D;
+    inline static uintptr_t r_forearm_bone_idx  = 0x3E;
+    inline static uintptr_t r_hand_bone_idx     = 0x41;
+    inline static uintptr_t neck_bone_idx       = 0x34;
+    inline static uintptr_t head_bone_idx       = 0x35;
+    inline static uintptr_t bone_array_count_off = 0x18;
+    inline static uintptr_t bone_array_data_off  = 0x20;
+    inline static uintptr_t bone_array_elem_size = 0x8;
 };
 
 struct player_model
 {
     inline static uintptr_t boneTransforms  = 0x98;
     inline static uintptr_t _multiMesh      = 0x448;
-    inline static uintptr_t position        = 0x2f8; // position
+    inline static uintptr_t position        = 0x2f8;
     inline static uintptr_t collision       = 0xd0;
     inline static uintptr_t visible         = 0xc4;
     inline static uintptr_t isNpc           = 0x490;
@@ -201,21 +223,21 @@ struct convar_graphics
 
 // ---------------------------------------------------------------------------
 //  Resolve every class base at runtime. Call once g_il2cppBase is known.
+//  We use the RVA from the dump directly, rebased to the loaded module base.
 // ---------------------------------------------------------------------------
 inline void resolveClasses() {
-    g_il2cppBase = Il2CppResolver::inst().il2cppBase();
+    g_il2cppBase = (uintptr_t)GetModuleHandleW(L"GameAssembly.dll");
+    if (!g_il2cppBase) return;
 
-    // Prefer clean il2cpp API lookup; fall back to scanning for the typeinfo
-    // RVA recorded by the dump (rebased to the loaded module).
-    base_networkable::base_address = Il2CppResolver::inst().findClass("BaseNetworkable");
-    if (!base_networkable::base_address)
-        base_networkable::base_address = Il2CppResolver::inst().findByRva(base_networkable::typeinfo_rva);
-
-    main_camera::base_address = Il2CppResolver::inst().findClass("UnityEngine.Camera");
-    if (!main_camera::base_address)
-        main_camera::base_address = Il2CppResolver::inst().findByRva(main_camera::typeinfo_rva);
+    // Rebase the typeinfo RVAs to the runtime base of GameAssembly.dll
+    base_networkable::base_address = g_il2cppBase + base_networkable::typeinfo_rva;
+    main_camera::base_address = g_il2cppBase + main_camera::typeinfo_rva;
 }
 
+// ---------------------------------------------------------------------------
+//  Decryption namespace - all functions use il2cpp_gchandle_get_target
+//  because the dumper's decryption routines return a handle, not an RVA.
+// ---------------------------------------------------------------------------
 namespace decryption {
 
 // --- client_entities decryption (from the dump) -----------------------------
@@ -239,7 +261,7 @@ inline uintptr_t client_entities(uint64_t a1)
         *((std::uint32_t*)rdx - 1) = ecx;
         --r8d;
     } while (r8d);
-    return il2cpp_get_handle(rax);
+    return il2cpp_gchandle_get_target(rax);
 }
 
 // --- entity_list decryption (from the dump) ---------------------------------
@@ -266,11 +288,11 @@ inline uintptr_t entity_list(uint64_t a1)
         *((std::uint32_t*)rdx - 1) = ecx;
         --r8d;
     } while (r8d);
-    return il2cpp_get_handle(rax);
+    return il2cpp_gchandle_get_target(rax);
 }
 
 // --- clActiveItem decryption (from the dump) --------------------------------
-inline uintptr_t cl_active_item(uint64_t a1)
+inline uintptr_t clActiveItem(uint64_t a1)
 {
     std::uint32_t* rdx = (std::uint32_t*)&a1;
     std::uint32_t r9d = 0x1;
@@ -289,7 +311,7 @@ inline uintptr_t cl_active_item(uint64_t a1)
 }
 
 // --- player_inventory decryption (from the dump) ----------------------------
-inline uintptr_t player_inventory(uint64_t a1)
+inline uintptr_t playerInventory(uint64_t a1)
 {
     std::uintptr_t rax = driver.read<std::uintptr_t>(a1 + 0x18);
     std::uint32_t* rdx = (std::uint32_t*)&rax;
@@ -308,11 +330,11 @@ inline uintptr_t player_inventory(uint64_t a1)
         *((std::uint32_t*)rdx - 1) = ecx;
         --r8d;
     } while (r8d);
-    return il2cpp_get_handle(rax);
+    return il2cpp_gchandle_get_target(rax);
 }
 
 // --- player_eyes decryption (from the dump) ---------------------------------
-inline uintptr_t player_eyes(uint64_t a1)
+inline uintptr_t playerEyes(uint64_t a1)
 {
     std::uintptr_t rax = driver.read<std::uintptr_t>(a1 + 0x18);
     std::uint32_t* rdx = (std::uint32_t*)&rax;
@@ -331,7 +353,7 @@ inline uintptr_t player_eyes(uint64_t a1)
         *((std::uint32_t*)rdx - 1) = ecx;
         --r8d;
     } while (r8d);
-    return il2cpp_get_handle(rax);
+    return il2cpp_gchandle_get_target(rax);
 }
 
 // --- fov decrypt/encrypt (from the dump) ------------------------------------
