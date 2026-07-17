@@ -20,6 +20,7 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
         return out;
     }
 
+    // 1. BaseNetworkable class
     uintptr_t bnClass = base_networkable::base_address;
     if (!bnClass) {
         dbglog("[!] gatherEntities: bnClass is 0");
@@ -27,6 +28,7 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     }
     dbglog("[*] gatherEntities: bnClass = 0x%llX", (unsigned long long)bnClass);
 
+    // 2. static_fields (0xB8)
     uintptr_t staticFields = driver.read<uintptr_t>(bnClass + base_networkable::static_fields);
     if (!staticFields) {
         dbglog("[!] gatherEntities: staticFields is 0");
@@ -34,6 +36,7 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     }
     dbglog("[*] gatherEntities: staticFields = 0x%llX", (unsigned long long)staticFields);
 
+    // 3. client_entities wrapper (0x8)
     uintptr_t wrapper = driver.read<uintptr_t>(staticFields + base_networkable::client_entities);
     if (!wrapper) {
         dbglog("[!] gatherEntities: wrapper is 0");
@@ -41,28 +44,23 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     }
     dbglog("[*] gatherEntities: wrapper = 0x%llX", (unsigned long long)wrapper);
 
-    uintptr_t handle = decryption::client_entities(wrapper);
+    // 4. Decrypt wrapper -> tagged handle
+    uintptr_t handle = decrypt_client_entities(wrapper);
     if (!handle) {
         dbglog("[!] gatherEntities: handle is 0 after decryption");
         return out;
     }
     dbglog("[*] gatherEntities: handle = 0x%llX", (unsigned long long)handle);
 
-    // استفاده از resolve_tagged_handle
+    // 5. Convert handle to real address using resolve_tagged_handle
     uintptr_t entityList = resolve_tagged_handle(handle);
     if (!entityList) {
         dbglog("[!] gatherEntities: entityList is 0 after resolve_tagged_handle");
-        // fallback به il2cpp_gchandle_get_target
-        entityList = il2cpp_gchandle_get_target(handle);
-        if (!entityList) {
-            dbglog("[!] gatherEntities: entityList is 0 after il2cpp_gchandle_get_target too");
-            return out;
-        }
-        dbglog("[*] gatherEntities: entityList (via il2cpp_gchandle_get_target) = 0x%llX", (unsigned long long)entityList);
-    } else {
-        dbglog("[*] gatherEntities: entityList (via resolve_tagged_handle) = 0x%llX", (unsigned long long)entityList);
+        return out;
     }
+    dbglog("[*] gatherEntities: entityList = 0x%llX", (unsigned long long)entityList);
 
+    // 6. BufferList: buffer at +0x10, count at +0x18
     uintptr_t buffer = driver.read<uintptr_t>(entityList + base_networkable::buffer_list_array);
     int count = driver.read<int>(entityList + base_networkable::buffer_list_size);
     dbglog("[*] gatherEntities: buffer = 0x%llX, count = %d", (unsigned long long)buffer, count);
@@ -72,6 +70,7 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
         return out;
     }
 
+    // 7. Iterate entities (each entry is 8 bytes, first at +0x20)
     for (int i = 0; i < count; ++i) {
         uintptr_t obj = driver.read<uintptr_t>(buffer + 0x20 + (uintptr_t)i * 8);
         if (!obj) continue;
@@ -84,20 +83,25 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
         e.className = cn;
         e.type = EntityType::Player;
 
+        // Position from PlayerModel (0x6F0) -> player_model::position (0x2F8)
         uintptr_t pm = driver.read<uintptr_t>(obj + base_player::playerModel);
         if (pm) {
             e.position = driver.read<Vec3>(pm + player_model::position);
             e.headPos = e.position + Vec3{0, 1.8f, 0};
         }
 
+        // Health
         e.health = driver.read<float>(obj + base_combat_entity::_health);
         e.maxHealth = driver.read<float>(obj + base_combat_entity::_maxHealth);
 
+        // Name
         uintptr_t namePtr = driver.read<uintptr_t>(obj + base_player::displayName);
         e.name = driver.readString(namePtr);
 
+        // Team
         e.team = driver.read<uint64_t>(obj + base_player::currentTeam);
 
+        // Distance
         float dx = e.position.x - camPos.x;
         float dy = e.position.y - camPos.y;
         float dz = e.position.z - camPos.z;
@@ -105,6 +109,16 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
 
         out.push_back(e);
     }
+
     dbglog("[*] gatherEntities: found %zu entities", out.size());
+    return out;
+}
+
+std::vector<EntityESP> gatherPlayers(const Vec3& camPos) {
+    std::vector<EntityESP> out;
+    auto all = gatherEntities(camPos);
+    for (auto& e : all) {
+        if (e.type == EntityType::Player) out.push_back(e);
+    }
     return out;
 }

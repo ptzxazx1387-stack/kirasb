@@ -26,58 +26,85 @@ static Settings g_settings;
 static Overlay g_overlay;
 static bool g_running = true;
 
+// ---------------------------------------------------------------------------
+//  getLocalPlayer: use camera chain (main_camera + 0xB8 -> +0x8 -> +0x10)
+// ---------------------------------------------------------------------------
 static uintptr_t getLocalPlayer() {
-    if (main_camera::base_address) {
-        uintptr_t sfields = driver.read<uintptr_t>(main_camera::base_address + main_camera::static_fields);
-        dbglog("[*] getLocalPlayer: sfields = 0x%llX", (unsigned long long)sfields);
-        if (!sfields) return 0;
-        uintptr_t camObj = driver.read<uintptr_t>(sfields + main_camera::instance);
-        dbglog("[*] getLocalPlayer: camObj = 0x%llX", (unsigned long long)camObj);
-        if (!camObj) return 0;
-        uintptr_t entity = driver.read<uintptr_t>(camObj + main_camera::entity);
-        dbglog("[*] getLocalPlayer: entity = 0x%llX", (unsigned long long)entity);
-        return entity;
+    if (!main_camera::base_address) return 0;
+
+    uintptr_t sfields = driver.read<uintptr_t>(main_camera::base_address + main_camera::static_fields);
+    if (!sfields) {
+        dbglog("[!] getLocalPlayer: sfields is 0");
+        return 0;
     }
-    return 0;
+    dbglog("[*] getLocalPlayer: sfields = 0x%llX", (unsigned long long)sfields);
+
+    uintptr_t camObj = driver.read<uintptr_t>(sfields + main_camera::instance);
+    if (!camObj) {
+        dbglog("[!] getLocalPlayer: camObj is 0");
+        return 0;
+    }
+    dbglog("[*] getLocalPlayer: camObj = 0x%llX", (unsigned long long)camObj);
+
+    uintptr_t entity = driver.read<uintptr_t>(camObj + main_camera::entity);
+    dbglog("[*] getLocalPlayer: entity = 0x%llX", (unsigned long long)entity);
+    return entity;
 }
 
+// ---------------------------------------------------------------------------
+//  drawESP
+// ---------------------------------------------------------------------------
 static void drawESP() {
     if (!g_settings.esp || !g_il2cppBase) return;
+
     uintptr_t camObj = driver.read<uintptr_t>(main_camera::base_address + main_camera::static_fields + main_camera::instance);
     if (!camObj) return;
+
     Matrix4x4 vm = driver.read<Matrix4x4>(camObj + main_camera::view_matrix);
     Vec3 cam = driver.read<Vec3>(camObj + main_camera::position);
     uintptr_t local = getLocalPlayer();
     uint64_t localTeam = local ? driver.read<uint64_t>(local + base_player::currentTeam) : 0;
+
     ImDrawList* draw = ImGui::GetForegroundDrawList();
     ImVec2 res = ImGui::GetIO().DisplaySize;
 
     for (const EntityESP& p : gatherEntities(cam)) {
         if (p.object == local) continue;
-        Vec2 screen; if (!worldToScreen(p.position, screen, vm, (int)res.x, (int)res.y)) continue;
+
+        Vec2 screen;
+        if (!worldToScreen(p.position, screen, vm, (int)res.x, (int)res.y)) continue;
         if (p.distance > g_settings.espMaxDist) continue;
 
         bool teammate = (localTeam != 0 && p.team == localTeam);
         ImU32 color = teammate ? IM_COL32(0, 255, 0, 255) : IM_COL32(255, 50, 50, 255);
+
         float h = clampf(2000.0f / (p.distance + 1.0f), 20.0f, 320.0f);
         float w = h * 0.5f;
 
         if (g_settings.showLine)
-            draw->AddLine({res.x*0.5f, res.y}, {screen.x, screen.y}, color, 1.0f);
-        draw->AddRect({screen.x - w*0.5f, screen.y - h}, {screen.x + w*0.5f, screen.y}, color);
+            draw->AddLine({res.x * 0.5f, res.y}, {screen.x, screen.y}, color, 1.0f);
+
+        draw->AddRect({screen.x - w * 0.5f, screen.y - h}, {screen.x + w * 0.5f, screen.y}, color);
+
         if (g_settings.showName)
-            draw->AddText({screen.x - w*0.5f, screen.y - h - 14}, IM_COL32(255,255,255,255), p.name.c_str());
+            draw->AddText({screen.x - w * 0.5f, screen.y - h - 14}, IM_COL32(255, 255, 255, 255), p.name.c_str());
+
         if (g_settings.showHealth && p.maxHealth > 0) {
             float frac = clampf(p.health / p.maxHealth, 0.f, 1.f);
-            draw->AddRectFilled({screen.x - w*0.5f - 4, screen.y - h * frac}, {screen.x - w*0.5f, screen.y}, IM_COL32(0,255,0,220));
+            draw->AddRectFilled({screen.x - w * 0.5f - 4, screen.y - h * frac}, {screen.x - w * 0.5f, screen.y}, IM_COL32(0, 255, 0, 220));
         }
+
         if (g_settings.showDistance) {
-            char buf[32]; snprintf(buf, sizeof(buf), "%.0fm", p.distance);
-            draw->AddText({screen.x - w*0.5f, screen.y + 2}, IM_COL32(220,220,220,255), buf);
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%.0fm", p.distance);
+            draw->AddText({screen.x - w * 0.5f, screen.y + 2}, IM_COL32(220, 220, 220, 255), buf);
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+//  drawMenu
+// ---------------------------------------------------------------------------
 static void drawMenu() {
     ImGui::Begin("Rust Trainer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -103,11 +130,10 @@ static void drawMenu() {
         uintptr_t local = getLocalPlayer();
         ImGui::Text("LocalPlayer: 0x%llX %s", (unsigned long long)local, local ? "(OK)" : "(NULL)");
 
-        // Entity list info
         if (g_il2cppBase && base_networkable::base_address) {
             uintptr_t staticFields = driver.read<uintptr_t>(base_networkable::base_address + base_networkable::static_fields);
             uintptr_t wrapper = driver.read<uintptr_t>(staticFields + base_networkable::client_entities);
-            uintptr_t handle = decryption::client_entities(wrapper);
+            uintptr_t handle = decrypt_client_entities(wrapper);
             uintptr_t entityList = resolve_tagged_handle(handle);
             uintptr_t buffer = entityList ? driver.read<uintptr_t>(entityList + base_networkable::buffer_list_array) : 0;
             int count = entityList ? driver.read<int>(entityList + base_networkable::buffer_list_size) : 0;
@@ -119,9 +145,13 @@ static void drawMenu() {
     ImGui::End();
 }
 
+// ---------------------------------------------------------------------------
+//  cheatThread: applies No Recoil and No Spread
+// ---------------------------------------------------------------------------
 static void cheatThread() {
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
         if (!g_il2cppBase) continue;
         uintptr_t local = getLocalPlayer();
         if (!local) continue;
@@ -129,6 +159,7 @@ static void cheatThread() {
         if (g_settings.noRecoil) {
             uintptr_t active = driver.read<uintptr_t>(local + base_player::clActiveItem);
             if (active) {
+                // Item::heldEntity = 0x80 (new dumper)
                 uintptr_t held = driver.read<uintptr_t>(active + item::heldEntity);
                 if (held) {
                     uintptr_t recoil = driver.read<uintptr_t>(held + base_projectile::recoil);
@@ -155,6 +186,9 @@ static void cheatThread() {
     }
 }
 
+// ---------------------------------------------------------------------------
+//  cheatMain: entry point for the cheat thread
+// ---------------------------------------------------------------------------
 static DWORD WINAPI cheatMain(LPVOID) {
     dbglog("[*] Waiting for GameAssembly.dll...");
     while (!(g_il2cppBase = (uintptr_t)GetModuleHandleW(L"GameAssembly.dll"))) Sleep(500);
@@ -165,7 +199,10 @@ static DWORD WINAPI cheatMain(LPVOID) {
            (unsigned long long)base_networkable::base_address,
            (unsigned long long)main_camera::base_address);
 
-    if (!g_overlay.init()) { dbglog("[!] Overlay init failed"); return 1; }
+    if (!g_overlay.init()) {
+        dbglog("[!] Overlay init failed");
+        return 1;
+    }
     dbglog("[*] Overlay init OK");
 
     g_overlay.setDraw([]() {
@@ -181,6 +218,9 @@ static DWORD WINAPI cheatMain(LPVOID) {
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+//  DllMain
+// ---------------------------------------------------------------------------
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_dllInstance = hModule;

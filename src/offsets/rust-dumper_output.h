@@ -1,13 +1,15 @@
 // ===========================================================================
-//  بروزرسانی شده با اطلاعات جدید از UC - تاریخ 2026-07-17
+//  Offsets + Decryption + Handle Resolver
+//  Updated with new dumper data (checkTHIS_AI.md + info 4)
 // ===========================================================================
 #pragma once
-#include "mem.h"
 #include <cstdint>
+#include <windows.h>
 #include <intrin.h>
+#include "mem.h"
 
 // ---------------------------------------------------------------------------
-//  آفست‌های کلاس‌های اصلی (RVAهای ثابت از دامپ)
+//  Class RVAs (rebased at runtime)
 // ---------------------------------------------------------------------------
 struct base_networkable
 {
@@ -25,7 +27,7 @@ struct main_camera
     inline static uintptr_t typeinfo_rva = 0xFCB7488;
     inline static uintptr_t base_address = 0;
     inline static uintptr_t static_fields = 0xB8;
-    inline static uintptr_t instance = 0x8;
+    inline static uintptr_t instance = 0x8;      // new dumper: 0x8
     inline static uintptr_t entity = 0x10;
     inline static uintptr_t view_matrix = 0x2FC;
     inline static uintptr_t position = 0x444;
@@ -51,16 +53,14 @@ struct base_combat_entity
     inline static uintptr_t _maxHealth = 0x2A8;
 };
 
-struct player_eyes
-{
-    inline static uintptr_t viewOffset = 0x40;
-    inline static uintptr_t bodyRotation = 0x50;
-    inline static uintptr_t worldPosition = 0x60;
-};
-
 struct player_model
 {
     inline static uintptr_t position = 0x2F8;
+};
+
+struct item
+{
+    inline static uintptr_t heldEntity = 0x80;   // new dumper: 0x80
 };
 
 struct base_projectile
@@ -70,10 +70,12 @@ struct base_projectile
     inline static uintptr_t aimSway = 0x3E8;
     inline static uintptr_t aimSwaySpeed = 0x3EC;
     inline static uintptr_t recoil = 0x3F0;
+    inline static uintptr_t projectileVelocityScale = 0x37C;
     inline static uintptr_t automatic = 0x380;
     inline static uintptr_t reloadTime = 0x3C0;
     inline static uintptr_t primaryMagazine = 0x3C8;
     inline static uintptr_t stancePenaltyScale = 0x418;
+    inline static uintptr_t hasADS = 0x41C;
 };
 
 struct recoil_properties
@@ -84,16 +86,8 @@ struct recoil_properties
     inline static uintptr_t recoilPitchMax = 0x24;
 };
 
-struct item
-{
-    inline static uintptr_t uid = 0x40;
-    inline static uintptr_t info = 0x70;
-    inline static uintptr_t amount = 0xF8;
-    inline static uintptr_t heldEntity = 0x80;
-};
-
 // ---------------------------------------------------------------------------
-//  تابع resolveClasses: مقداردهی base_addressها با RVAهای ثابت
+//  Resolve class bases at runtime (rebase RVAs)
 // ---------------------------------------------------------------------------
 inline void resolveClasses() {
     g_il2cppBase = (uintptr_t)GetModuleHandleW(L"GameAssembly.dll");
@@ -104,11 +98,10 @@ inline void resolveClasses() {
 }
 
 // ---------------------------------------------------------------------------
-//  دیکریپشن‌ها (برگرفته از اطلاعات جدید)
+//  Decrypt client_entities (from new dumper)
+//  Ops: ADD, ROL 29, ADD, XOR (2 lanes)
 // ---------------------------------------------------------------------------
-namespace decryption {
-
-inline uintptr_t client_entities(uint64_t encrypted) {
+inline uintptr_t decrypt_client_entities(uint64_t encrypted) {
     uint32_t* p = (uint32_t*)&encrypted;
     for (int i = 0; i < 2; ++i) {
         uint32_t v = p[i];
@@ -118,7 +111,31 @@ inline uintptr_t client_entities(uint64_t encrypted) {
         v ^= 0xE58A30D8u;
         p[i] = v;
     }
-    return (uintptr_t)encrypted;
+    return (uintptr_t)encrypted;   // returns a tagged handle
 }
 
-} // namespace decryption
+// ---------------------------------------------------------------------------
+//  Alternative handle resolver (works without il2cpp_gchandle_get_target)
+//  From info 4: il2cppGCHandleBase = 0x10132020
+// ---------------------------------------------------------------------------
+inline uintptr_t resolve_tagged_handle(uint64_t decrypted) {
+    if (!decrypted) return 0;
+
+    // If LSB is set, it's a tagged handle index
+    if (decrypted & 1) {
+        uint32_t idx = (uint32_t)decrypted;
+        if (idx == 0 || idx > 0x1000000) return 0;
+
+        // GCHandle table base (from info 4: 0x10132020)
+        static uintptr_t gc_handle_table = 0;
+        if (!gc_handle_table) {
+            gc_handle_table = g_il2cppBase + 0x10132020;
+        }
+
+        uintptr_t target = driver.read<uintptr_t>(gc_handle_table + (uintptr_t)idx * 8);
+        return target;
+    }
+
+    // Otherwise it's a direct pointer
+    return (uintptr_t)decrypted;
+}

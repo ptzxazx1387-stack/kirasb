@@ -6,7 +6,6 @@
 #include <string>
 #include <cstring>
 #include <intrin.h>
-#include "dbglog.h"   // <-- اضافه شد
 
 // ===========================================================================
 //  متغیرهای سراسری
@@ -85,7 +84,6 @@ inline uintptr_t resolve_tagged_handle(uint64_t decrypted) {
         return 0;
     }
 
-    // اگر LSB ست باشد، یک handle index است
     if (decrypted & 1) {
         uint32_t idx = (uint32_t)decrypted;
         if (idx == 0 || idx > 0x1000000) {
@@ -93,10 +91,9 @@ inline uintptr_t resolve_tagged_handle(uint64_t decrypted) {
             return 0;
         }
 
-        // جدول GCHandle (از دامپ)
         static uintptr_t gc_handle_table = 0;
         if (!gc_handle_table) {
-            gc_handle_table = g_il2cppBase + 0x1017C260; // gc_handles از دامپ
+            gc_handle_table = g_il2cppBase + 0x1017C260;
             dbglog("[*] resolve_tagged_handle: gc_handle_table = 0x%llX", (unsigned long long)gc_handle_table);
         }
 
@@ -105,7 +102,6 @@ inline uintptr_t resolve_tagged_handle(uint64_t decrypted) {
         return target;
     }
 
-    // در غیر این صورت، خودش آدرس مستقیم است
     dbglog("[*] resolve_tagged_handle: direct pointer 0x%llX", (unsigned long long)decrypted);
     return (uintptr_t)decrypted;
 }
