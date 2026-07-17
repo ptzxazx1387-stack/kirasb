@@ -53,6 +53,7 @@ struct base_player
     inline static uintptr_t movement        = 0x4e0; // movement
     inline static uintptr_t displayName     = 0x2d8; // display_name
     inline static uintptr_t current_team    = 0x538; // current_team
+    inline static uintptr_t cl_active_item  = 0x568; // alias of clActiveItem
 };
 
 struct base_combat_entity
@@ -86,6 +87,7 @@ struct item
     inline static uintptr_t itemDefinition = 0x70; // itemdefinition
     inline static uintptr_t itemUid        = 0x40; // uid
     inline static uintptr_t heldEntity     = 0x58; // HeldEntity
+    inline static uintptr_t held_entity    = 0x58; // alias of heldEntity
     inline static uintptr_t info           = 0x70; // info
     inline static uintptr_t amount         = 0x4c; // amount
 };
