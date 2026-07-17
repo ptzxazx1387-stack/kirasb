@@ -35,6 +35,7 @@ add_library(rust_trainer SHARED
     src/main.cpp
     src/core/mem.h
     src/core/vecmath.h
+    src/core/dbglog.h
     src/esp/esp.cpp
     src/esp/esp.h
     src/overlay/overlay.cpp
