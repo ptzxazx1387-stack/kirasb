@@ -27,7 +27,7 @@ struct main_camera
     inline static uintptr_t typeinfo_rva = 0xFCB7488;
     inline static uintptr_t base_address = 0;
     inline static uintptr_t static_fields = 0xB8;
-    inline static uintptr_t instance = 0x8;      // new dumper: 0x8
+    inline static uintptr_t instance = 0x8;
     inline static uintptr_t entity = 0x10;
     inline static uintptr_t view_matrix = 0x2FC;
     inline static uintptr_t position = 0x444;
@@ -60,7 +60,7 @@ struct player_model
 
 struct item
 {
-    inline static uintptr_t heldEntity = 0x80;   // new dumper: 0x80
+    inline static uintptr_t heldEntity = 0x80;
 };
 
 struct base_projectile
