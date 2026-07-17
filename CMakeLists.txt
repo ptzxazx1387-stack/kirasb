@@ -5,13 +5,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
-    # Silence the noise and use UTF-8 for the wide-char string handling.
-    add_compile_options(/W3 /utf-8)
+    # خاموش کردن اخطارهای امنیتی و استفاده از UTF-8
+    add_compile_options(/W3 /utf-8 /D_CRT_SECURE_NO_WARNINGS)
 endif()
 
 # ---------------------------------------------------------------------------
-#  Dear ImGui is fetched automatically at configure time. No manual download.
-#  Pinned to a known-good tag. Bump GIT_TAG to upgrade.
+#  Dear ImGui به‌صورت خودکار در زمان Configure دانلود می‌شود.
 # ---------------------------------------------------------------------------
 include(FetchContent)
 FetchContent_Declare(
@@ -21,7 +20,7 @@ FetchContent_Declare(
 )
 FetchContent_Populate(imgui)
 
-# imgui ships no CMake target of its own here, so build it from sources.
+# ساخت کتابخانه استاتیک ImGui از سورس
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -36,11 +35,11 @@ target_include_directories(imgui PUBLIC
 )
 
 # ---------------------------------------------------------------------------
-#  Trainer as an injected DLL (internal cheat).
+#  فایل DLL اصلی (ترینر)
 # ---------------------------------------------------------------------------
 add_library(rust_trainer SHARED
     src/main.cpp
-    src/core/mem.cpp
+    # src/core/mem.cpp   <-- این خط را حذف کن (توابع در mem.h تعریف شده‌اند)
     src/core/mem.h
     src/core/vecmath.h
     src/esp/esp.cpp
@@ -49,8 +48,7 @@ add_library(rust_trainer SHARED
     src/overlay/overlay.h
 )
 
-# All source subdirs are on the include path so headers can be included
-# by bare filename (e.g. #include "rust-dumper_output.h").
+# مسیرهای Include برای تمام زیرپوشه‌ها
 target_include_directories(rust_trainer PRIVATE
     src
     src/core
