@@ -29,11 +29,14 @@ static bool g_running = true;
 static uintptr_t getLocalPlayer() {
     if (main_camera::base_address) {
         uintptr_t sfields = driver.read<uintptr_t>(main_camera::base_address + main_camera::static_fields);
+        dbglog("[*] getLocalPlayer: sfields = 0x%llX", (unsigned long long)sfields);
+        if (!sfields) return 0;
         uintptr_t camObj = driver.read<uintptr_t>(sfields + main_camera::instance);
-        if (camObj) {
-            uintptr_t entity = driver.read<uintptr_t>(camObj + main_camera::entity);
-            if (entity) return entity;
-        }
+        dbglog("[*] getLocalPlayer: camObj = 0x%llX", (unsigned long long)camObj);
+        if (!camObj) return 0;
+        uintptr_t entity = driver.read<uintptr_t>(camObj + main_camera::entity);
+        dbglog("[*] getLocalPlayer: entity = 0x%llX", (unsigned long long)entity);
+        return entity;
     }
     return 0;
 }

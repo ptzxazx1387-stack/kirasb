@@ -79,24 +79,30 @@ inline Mem driver;
 //  تبدیل handle به آدرس واقعی (روش جایگزین بدون il2cpp_gchandle_get_target)
 // ===========================================================================
 inline uintptr_t resolve_tagged_handle(uint64_t decrypted) {
-    if (!decrypted) return 0;
+    if (!decrypted) {
+        dbglog("[!] resolve_tagged_handle: decrypted is 0");
+        return 0;
+    }
 
-    // اگر LSB ست باشد، یک handle index است
     if (decrypted & 1) {
         uint32_t idx = (uint32_t)decrypted;
-        if (idx == 0 || idx > 0x1000000) return 0;
+        if (idx == 0 || idx > 0x1000000) {
+            dbglog("[!] resolve_tagged_handle: invalid idx %u", idx);
+            return 0;
+        }
 
-        // جدول GCHandle (از دامپ)
         static uintptr_t gc_handle_table = 0;
         if (!gc_handle_table) {
-            gc_handle_table = g_il2cppBase + 0x1017C260; // gc_handles از دامپ
+            gc_handle_table = g_il2cppBase + 0x1017C260;
+            dbglog("[*] resolve_tagged_handle: gc_handle_table = 0x%llX", (unsigned long long)gc_handle_table);
         }
 
         uintptr_t target = driver.read<uintptr_t>(gc_handle_table + (uintptr_t)idx * 8);
+        dbglog("[*] resolve_tagged_handle: idx=%u -> target=0x%llX", idx, (unsigned long long)target);
         return target;
     }
 
-    // در غیر این صورت، خودش آدرس مستقیم است
+    dbglog("[*] resolve_tagged_handle: direct pointer 0x%llX", (unsigned long long)decrypted);
     return (uintptr_t)decrypted;
 }
 

@@ -1,6 +1,7 @@
 #include "esp.h"
 #include "mem.h"
 #include "rust-dumper_output.h"
+#include "dbglog.h"
 #include <cmath>
 
 static std::string getClassName(uintptr_t obj) {
@@ -14,27 +15,62 @@ static std::string getClassName(uintptr_t obj) {
 
 std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     std::vector<EntityESP> out;
-    if (!g_il2cppBase) return out;
+    if (!g_il2cppBase) {
+        dbglog("[!] gatherEntities: g_il2cppBase is 0");
+        return out;
+    }
 
     uintptr_t bnClass = base_networkable::base_address;
-    if (!bnClass) return out;
+    if (!bnClass) {
+        dbglog("[!] gatherEntities: bnClass is 0");
+        return out;
+    }
+    dbglog("[*] gatherEntities: bnClass = 0x%llX", (unsigned long long)bnClass);
 
     uintptr_t staticFields = driver.read<uintptr_t>(bnClass + base_networkable::static_fields);
-    if (!staticFields) return out;
+    if (!staticFields) {
+        dbglog("[!] gatherEntities: staticFields is 0");
+        return out;
+    }
+    dbglog("[*] gatherEntities: staticFields = 0x%llX", (unsigned long long)staticFields);
 
     uintptr_t wrapper = driver.read<uintptr_t>(staticFields + base_networkable::client_entities);
-    if (!wrapper) return out;
+    if (!wrapper) {
+        dbglog("[!] gatherEntities: wrapper is 0");
+        return out;
+    }
+    dbglog("[*] gatherEntities: wrapper = 0x%llX", (unsigned long long)wrapper);
 
     uintptr_t handle = decryption::client_entities(wrapper);
-    if (!handle) return out;
+    if (!handle) {
+        dbglog("[!] gatherEntities: handle is 0 after decryption");
+        return out;
+    }
+    dbglog("[*] gatherEntities: handle = 0x%llX", (unsigned long long)handle);
 
-    // استفاده از resolve_tagged_handle به جای il2cpp_gchandle_get_target
+    // استفاده از resolve_tagged_handle
     uintptr_t entityList = resolve_tagged_handle(handle);
-    if (!entityList) return out;
+    if (!entityList) {
+        dbglog("[!] gatherEntities: entityList is 0 after resolve_tagged_handle");
+        // fallback به il2cpp_gchandle_get_target
+        entityList = il2cpp_gchandle_get_target(handle);
+        if (!entityList) {
+            dbglog("[!] gatherEntities: entityList is 0 after il2cpp_gchandle_get_target too");
+            return out;
+        }
+        dbglog("[*] gatherEntities: entityList (via il2cpp_gchandle_get_target) = 0x%llX", (unsigned long long)entityList);
+    } else {
+        dbglog("[*] gatherEntities: entityList (via resolve_tagged_handle) = 0x%llX", (unsigned long long)entityList);
+    }
 
     uintptr_t buffer = driver.read<uintptr_t>(entityList + base_networkable::buffer_list_array);
     int count = driver.read<int>(entityList + base_networkable::buffer_list_size);
-    if (!buffer || count <= 0 || count > 20000) return out;
+    dbglog("[*] gatherEntities: buffer = 0x%llX, count = %d", (unsigned long long)buffer, count);
+
+    if (!buffer || count <= 0 || count > 20000) {
+        dbglog("[!] gatherEntities: invalid buffer or count");
+        return out;
+    }
 
     for (int i = 0; i < count; ++i) {
         uintptr_t obj = driver.read<uintptr_t>(buffer + 0x20 + (uintptr_t)i * 8);
@@ -69,5 +105,6 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
 
         out.push_back(e);
     }
+    dbglog("[*] gatherEntities: found %zu entities", out.size());
     return out;
 }
