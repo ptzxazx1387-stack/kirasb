@@ -5,24 +5,38 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <intrin.h>
 
-// Runtime base of GameAssembly.dll in THIS process, set at cheat start.
 inline uintptr_t g_il2cppBase = 0;
-
-// HINSTANCE of THIS module (the injected DLL).
 inline HINSTANCE g_dllInstance = nullptr;
 
 // ---------------------------------------------------------------------------
-//  REAL il2cpp_gchandle_get_target - calls the actual function inside
-//  GameAssembly.dll using the RVA recorded by the dumper.
+//  حل کننده handle با دو RVA ممکن (آزمایش هر دو)
 // ---------------------------------------------------------------------------
 inline uintptr_t il2cpp_gchandle_get_target(uintptr_t handle) {
     if (!handle || !g_il2cppBase) return 0;
 
-    // RVA of il2cpp_gchandle_get_target from the dump (0x8365E0)
+    // RVAهای احتمالی از منابع مختلف
+    static const uintptr_t rva_candidates[] = { 0x8365E0, 0x7D6AD0 };
     static uintptr_t fn = 0;
+
     if (!fn) {
-        fn = g_il2cppBase + 0x8365E0;
+        // اولین بار که صدا زده میشود، هر دو را امتحان میکنیم
+        for (int i = 0; i < 2; ++i) {
+            uintptr_t addr = g_il2cppBase + rva_candidates[i];
+            // چک میکنیم که آیا آدرس معتبر به نظر میرسد (حداقل اولین بایت‌ها شبیه کد باشند)
+            __try {
+                uint8_t first_byte = *(uint8_t*)addr;
+                if (first_byte == 0x48 || first_byte == 0xE9) { // احتمالاً یک تابع است
+                    fn = addr;
+                    break;
+                }
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                continue;
+            }
+        }
+        // اگر هیچکدام کار نکرد، از مقدار اول استفاده میکنیم
+        if (!fn) fn = g_il2cppBase + 0x8365E0;
     }
 
     using Fn = uintptr_t(*)(uintptr_t);
@@ -30,29 +44,20 @@ inline uintptr_t il2cpp_gchandle_get_target(uintptr_t handle) {
 }
 
 // ---------------------------------------------------------------------------
-//  Memory access class - SEH-guarded reads/writes directly inside the game
-//  process (we are running internally, so no driver needed).
+//  کلاس دسترسی به حافظه (SEH-guarded)
 // ---------------------------------------------------------------------------
 class Mem {
 public:
     bool tryRead(uintptr_t addr, void* buf, size_t sz) const {
         if (!addr || !buf || sz == 0) return false;
-        __try {
-            memcpy(buf, (const void*)addr, sz);
-            return true;
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            return false;
-        }
+        __try { memcpy(buf, (const void*)addr, sz); return true; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
     }
 
     bool tryWrite(uintptr_t addr, const void* buf, size_t sz) const {
         if (!addr || !buf || sz == 0) return false;
-        __try {
-            memcpy((void*)addr, buf, sz);
-            return true;
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            return false;
-        }
+        __try { memcpy((void*)addr, buf, sz); return true; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
     }
 
     template <typename T>
@@ -80,8 +85,6 @@ public:
         return (uintptr_t)GetModuleHandleW(moduleName);
     }
 
-    // Read a Unity / il2cpp System.String from in-process memory.
-    // Layout: [object header 0x10][int32 length @0x10][wchar firstChar @0x14]
     std::string readString(uintptr_t addr) const {
         if (!addr) return "";
         int32_t len = 0;
@@ -97,6 +100,4 @@ public:
     }
 };
 
-// Global memory object so the offset header's decryption functions
-// (which call `driver.read<...>()` compile unchanged.
 inline Mem driver;

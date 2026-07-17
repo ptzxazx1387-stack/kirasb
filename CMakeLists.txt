@@ -5,13 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
-    # خاموش کردن اخطارهای امنیتی و استفاده از UTF-8
     add_compile_options(/W3 /utf-8 /D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-# ---------------------------------------------------------------------------
-#  Dear ImGui به‌صورت خودکار در زمان Configure دانلود می‌شود.
-# ---------------------------------------------------------------------------
+# Dear ImGui fetched automatically at configure time.
 include(FetchContent)
 FetchContent_Declare(
     imgui
@@ -20,7 +17,6 @@ FetchContent_Declare(
 )
 FetchContent_Populate(imgui)
 
-# ساخت کتابخانه استاتیک ImGui از سورس
 add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -34,21 +30,18 @@ target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}/backends
 )
 
-# ---------------------------------------------------------------------------
-#  فایل DLL اصلی (ترینر)
-# ---------------------------------------------------------------------------
+# Trainer DLL
 add_library(rust_trainer SHARED
     src/main.cpp
-    # src/core/mem.cpp   <-- این خط را حذف کن (توابع در mem.h تعریف شده‌اند)
     src/core/mem.h
     src/core/vecmath.h
     src/esp/esp.cpp
     src/esp/esp.h
     src/overlay/overlay.cpp
     src/overlay/overlay.h
+    src/offsets/rust-dumper_output.h
 )
 
-# مسیرهای Include برای تمام زیرپوشه‌ها
 target_include_directories(rust_trainer PRIVATE
     src
     src/core
