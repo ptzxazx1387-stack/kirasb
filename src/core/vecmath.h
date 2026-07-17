@@ -1,10 +1,44 @@
 #pragma once
 #include <cstdint>
+#include <cmath>
 
-struct Vec3 { float x = 0, y = 0, z = 0; };
-struct Vec2 { float x = 0, y = 0; };
+struct Vec3 {
+    float x = 0, y = 0, z = 0;
 
-struct Matrix4x4 { float m[16] = {}; };
+    Vec3() = default;
+    Vec3(float x, float y, float z) : x(x), y(y), z(z) {}
+
+    Vec3 operator+(const Vec3& other) const {
+        return Vec3(x + other.x, y + other.y, z + other.z);
+    }
+
+    Vec3 operator-(const Vec3& other) const {
+        return Vec3(x - other.x, y - other.y, z - other.z);
+    }
+
+    Vec3 operator*(float scalar) const {
+        return Vec3(x * scalar, y * scalar, z * scalar);
+    }
+
+    Vec3& operator+=(const Vec3& other) {
+        x += other.x; y += other.y; z += other.z;
+        return *this;
+    }
+
+    float Length() const {
+        return std::sqrt(x*x + y*y + z*z);
+    }
+};
+
+struct Vec2 {
+    float x = 0, y = 0;
+    Vec2() = default;
+    Vec2(float x, float y) : x(x), y(y) {}
+};
+
+struct Matrix4x4 {
+    float m[16] = {};
+};
 
 inline bool worldToScreen(const Vec3& world, Vec2& out,
                           const Matrix4x4& vm, int screenW, int screenH) {
