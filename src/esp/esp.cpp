@@ -14,38 +14,34 @@ static std::string getClassName(uintptr_t obj) {
     return driver.readString(namePtr);
 }
 
-static Vec3 getBonePos(uintptr_t model, uintptr_t boneOffset) {
-    if (!model) return {0,0,0};
-    uintptr_t bone = driver.read<uintptr_t>(model + boneOffset);
+static Vec3 getBoneByIndex(uintptr_t boneTransforms, int idx) {
+    if (!boneTransforms) return {0,0,0};
+    int count = driver.read<int>(boneTransforms + offsets::model::bone_array_count_off);
+    if (idx < 0 || idx >= count) return {0,0,0};
+    uintptr_t arr = driver.read<uintptr_t>(boneTransforms + offsets::model::bone_array_data_off);
+    if (!arr) return {0,0,0};
+    uintptr_t bone = driver.read<uintptr_t>(arr + (uintptr_t)idx * offsets::model::bone_array_elem_size);
     if (!bone) return {0,0,0};
-    return driver.read<Vec3>(bone + 0x90);
+    return driver.read<Vec3>(bone + offsets::unity_transform::world_pos_off);
 }
 
 static void readPlayerBones(uintptr_t player, EntityESP& e) {
     uintptr_t model = driver.read<uintptr_t>(player + offsets::base_player::player_model);
     if (!model) return;
-    
-    e.headPos = getBonePos(model, offsets::player_model::headBone);
-    e.neckPos = getBonePos(model, offsets::player_model::neckBone);
-    e.spinePos = getBonePos(model, offsets::player_model::position);
-    
-    uintptr_t shoulders = driver.read<uintptr_t>(model + 0x98);
-    if (shoulders) {
-        uintptr_t leftShoulder = driver.read<uintptr_t>(shoulders + 0x20);
-        uintptr_t rightShoulder = driver.read<uintptr_t>(shoulders + 0x28);
-        if (leftShoulder) e.leftShoulder = driver.read<Vec3>(leftShoulder + 0x90);
-        if (rightShoulder) e.rightShoulder = driver.read<Vec3>(rightShoulder + 0x90);
-    }
-    
-    uintptr_t leftHand = driver.read<uintptr_t>(model + 0x138);
-    uintptr_t rightHand = driver.read<uintptr_t>(model + 0x140);
-    if (leftHand) e.leftWrist = driver.read<Vec3>(leftHand + 0x90);
-    if (rightHand) e.rightWrist = driver.read<Vec3>(rightHand + 0x90);
-    
-    uintptr_t leftFoot = driver.read<uintptr_t>(model + 0x128);
-    uintptr_t rightFoot = driver.read<uintptr_t>(model + 0x130);
-    if (leftFoot) e.leftAnkle = driver.read<Vec3>(leftFoot + 0x90);
-    if (rightFoot) e.rightAnkle = driver.read<Vec3>(rightFoot + 0x90);
+
+    uintptr_t boneTransforms = driver.read<uintptr_t>(model + offsets::player_model::boneTransforms);
+    if (!boneTransforms) return;
+
+    e.headPos  = getBoneByIndex(boneTransforms, offsets::model::head_bone_idx);
+    e.neckPos  = getBoneByIndex(boneTransforms, offsets::model::neck_bone_idx);
+    e.spinePos = getBoneByIndex(boneTransforms, offsets::model::spine4_bone_idx);
+
+    e.leftShoulder  = getBoneByIndex(boneTransforms, offsets::model::l_clavicle_bone_idx);
+    e.rightShoulder = getBoneByIndex(boneTransforms, offsets::model::r_clavicle_bone_idx);
+    e.leftWrist     = getBoneByIndex(boneTransforms, offsets::model::l_hand_bone_idx);
+    e.rightWrist    = getBoneByIndex(boneTransforms, offsets::model::r_hand_bone_idx);
+    e.leftAnkle     = getBoneByIndex(boneTransforms, offsets::model::l_foot_bone_idx);
+    e.rightAnkle    = getBoneByIndex(boneTransforms, offsets::model::r_foot_bone_idx);
 }
 
 static EntityType classifyEntity(const std::string& className, uintptr_t obj) {
@@ -106,21 +102,26 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     if (!g_il2cppBase) return out;
 
     const uintptr_t staticClass = base_networkable::base_address;
-    const uintptr_t sfields = driver.read<uintptr_t>(staticClass + offsets::base_networkable::static_fields);
-    if (!sfields) return out;
-    
-    const uintptr_t entitiesList = driver.read<uintptr_t>(sfields + offsets::base_networkable::entities);
-    if (!entitiesList) return out;
+    if (!staticClass) return out;
 
-    const uintptr_t buffer = driver.read<uintptr_t>(entitiesList + 0x10);
-    const int count = driver.read<int>(entitiesList + 0x18);
+    // static_fields lives at the standard il2cpp offset (0xb8).
+    const uintptr_t sfields = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
+    if (!sfields) return out;
+
+    // client entities wrapper -> decrypt -> buffer list (array @ +0x10, size @ +0x18)
+    const uintptr_t entsObj = driver.read<uintptr_t>(sfields + base_networkable::entities);
+    if (!entsObj) return out;
+    const uintptr_t entsList = decryption::client_entities(entsObj);
+    if (!entsList) return out;
+    const uintptr_t buffer = driver.read<uintptr_t>(entsList + base_networkable::entListBase);
+    const int count = driver.read<int>(entsList + base_networkable::entLS);
     if (!buffer || count <= 0 || count > 20000) return out;
 
     for (int i = 0; i < count; ++i) {
         const uintptr_t handle = driver.read<uintptr_t>(buffer + 0x20 + (uintptr_t)i * 8);
         if (!handle) continue;
 
-        const uintptr_t obj = decryption::base_networkable_0(handle);
+        const uintptr_t obj = decryption::client_entities(handle);
         if (!obj) continue;
 
         EntityESP e;

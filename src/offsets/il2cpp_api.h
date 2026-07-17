@@ -73,6 +73,19 @@ struct Il2CppResolver {
     // Il2CppClass* IS the address the dumper's base_address refers to.
     uintptr_t classBase(const char* name) { return findClass(name); }
 
+    // Fallback: the dump records the class typeinfo as an RVA relative to the
+    // il2cpp image. Rebase it to the loaded module base. This is only a
+    // best-effort when the name-based lookup failed.
+    uintptr_t findByRva(uintptr_t rva) {
+        uintptr_t base = il2cppBase();
+        if (!base || !rva) return 0;
+        uintptr_t addr = base + rva;
+        // Sanity: the value at 'addr' should look like a valid class pointer
+        // (i.e. dereferencing yields a pointer inside the module). We can't
+        // fully verify, so just return the rebased address.
+        return addr;
+    }
+
 private:
     std::unordered_map<std::string, uintptr_t> m_cache;
 

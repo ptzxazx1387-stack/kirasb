@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  Rust offline trainer - external ESP/Wallhack overlay + cheats
 //
 //  - Runs INSIDE RustClient.exe (injected DLL); memory access is direct.
@@ -60,26 +60,30 @@ static bool     g_running = true;
 //  Helper: get the local player (first BasePlayer or camera->entity)
 // ---------------------------------------------------------------------------
 static uintptr_t getLocalPlayer() {
-    // First try via camera
-    const uintptr_t camStatic = camera::main_camera_c;
-    const uintptr_t sfields   = camStatic + camera::camera_static;
-    const uintptr_t camObj    = driver.read<uintptr_t>(sfields + camera::camera_object);
-    if (camObj) {
-        const uintptr_t entity = driver.read<uintptr_t>(camObj + camera::entity);
-        if (entity) return entity;
+    // First try via camera chain: [main_camera + 0xb8] -> [+0x28] -> [+0x10]
+    if (main_camera::base_address) {
+        const uintptr_t sfields = driver.read<uintptr_t>(main_camera::base_address + main_camera::static_fields);
+        const uintptr_t camObj  = driver.read<uintptr_t>(sfields + main_camera::instance);
+        if (camObj) {
+            const uintptr_t entity = driver.read<uintptr_t>(camObj + main_camera::entity);
+            if (entity) return entity;
+        }
     }
-    // Fallback: scan entity list for a player with empty display name (local)
+    // Fallback: scan entity list for a player
     const uintptr_t staticClass = base_networkable::base_address;
-    const uintptr_t listStatic  = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
-    const uintptr_t entitiesList = driver.read<uintptr_t>(listStatic + base_networkable::entities);
+    if (!staticClass) return 0;
+    const uintptr_t sfields = driver.read<uintptr_t>(staticClass + base_networkable::static_fields);
+    const uintptr_t entsObj = driver.read<uintptr_t>(sfields + base_networkable::entities);
+    if (!entsObj) return 0;
+    const uintptr_t entitiesList = decryption::client_entities(entsObj);
     if (!entitiesList) return 0;
-    const uintptr_t buffer = driver.read<uintptr_t>(entitiesList + 0x10);
-    const int       count  = driver.read<int>(entitiesList + 0x18);
+    const uintptr_t buffer = driver.read<uintptr_t>(entitiesList + base_networkable::entListBase);
+    const int       count  = driver.read<int>(entitiesList + base_networkable::entLS);
     if (!buffer || count <= 0 || count > 20000) return 0;
     for (int i = 0; i < count; ++i) {
         const uintptr_t handle = driver.read<uintptr_t>(buffer + 0x20 + (uintptr_t)i * 8);
         if (!handle) continue;
-        const uintptr_t obj = decryption::base_networkable_0(handle);
+        const uintptr_t obj = decryption::client_entities(handle);
         if (!obj) continue;
         uintptr_t klass = driver.read<uintptr_t>(obj);
         if (!klass) continue;
@@ -87,7 +91,7 @@ static uintptr_t getLocalPlayer() {
         if (!namePtr) continue;
         std::string cn = driver.readString(namePtr);
         if (cn.find("BasePlayer") == std::string::npos) continue;
-        uintptr_t pm = driver.read<uintptr_t>(obj + base_player::player_model);
+        uintptr_t pm = driver.read<uintptr_t>(obj + base_player::playerModel);
         if (!pm) continue;
         return obj; // first BasePlayer is likely local
     }
@@ -101,14 +105,14 @@ static void drawESP() {
     if (!g_settings.esp && !g_settings.debugAll) return;
     if (!g_il2cppBase) return;
 
-    const uintptr_t camStatic = camera::main_camera_c;
-    const uintptr_t sfields   = camStatic + camera::camera_static;
-    const uintptr_t camObj    = driver.read<uintptr_t>(sfields + camera::camera_object);
+    const uintptr_t camStatic = main_camera::base_address;
+    const uintptr_t sfields   = driver.read<uintptr_t>(camStatic + main_camera::static_fields);
+    const uintptr_t camObj    = driver.read<uintptr_t>(sfields + main_camera::instance);
     if (!camObj) return;
 
-    const uintptr_t localPlayer = driver.read<uintptr_t>(camObj + camera::entity);
-    const Matrix4x4 vm  = driver.read<Matrix4x4>(camObj + camera::view_matrix);
-    const Vec3      cam = driver.read<Vec3>(camObj + camera::position);
+    const uintptr_t localPlayer = driver.read<uintptr_t>(camObj + main_camera::entity);
+    const Matrix4x4 vm  = driver.read<Matrix4x4>(camObj + main_camera::view_matrix);
+    const Vec3      cam = driver.read<Vec3>(camObj + main_camera::position);
 
     const uint64_t localTeam = localPlayer
         ? driver.read<uint64_t>(localPlayer + base_player::current_team) : 0;
@@ -268,8 +272,8 @@ static void drawMenu() {
         ImGui::Text("il2cpp base : 0x%llX", (unsigned long long)g_il2cppBase);
         ImGui::Text("BaseNetworkable: 0x%llX %s", (unsigned long long)base_networkable::base_address,
                     base_networkable::base_address ? "(OK)" : "(NOT FOUND!)");
-        ImGui::Text("Camera main : 0x%llX %s", (unsigned long long)camera::main_camera_c,
-                    camera::main_camera_c ? "(OK)" : "(NOT FOUND!)");
+        ImGui::Text("Camera main : 0x%llX %s", (unsigned long long)main_camera::base_address,
+                    main_camera::base_address ? "(OK)" : "(NOT FOUND!)");
 
         uintptr_t local = getLocalPlayer();
         ImGui::Text("LocalPlayer : 0x%llX %s", (unsigned long long)local,
@@ -278,11 +282,12 @@ static void drawMenu() {
         // Sample the entity list directly and show how many we resolved.
         if (g_il2cppBase && base_networkable::base_address) {
             uintptr_t sfields    = driver.read<uintptr_t>(base_networkable::base_address + base_networkable::static_fields);
-            uintptr_t entities   = driver.read<uintptr_t>(sfields + base_networkable::entities);
-            uintptr_t buffer     = entities ? driver.read<uintptr_t>(entities + 0x10) : 0;
-            int       count      = entities ? driver.read<int>(entities + 0x18) : 0;
+            uintptr_t entsObj    = driver.read<uintptr_t>(sfields + base_networkable::entities);
+            uintptr_t entsList   = entsObj ? decryption::client_entities(entsObj) : 0;
+            uintptr_t buffer     = entsList ? driver.read<uintptr_t>(entsList + base_networkable::entListBase) : 0;
+            int       count      = entsList ? driver.read<int>(entsList + base_networkable::entLS) : 0;
             ImGui::Text("Entity list: sfields=0x%llX ents=0x%llX buf=0x%llX cnt=%d",
-                        (unsigned long long)sfields, (unsigned long long)entities,
+                        (unsigned long long)sfields, (unsigned long long)entsObj,
                         (unsigned long long)buffer, count);
 
         // Show first few class names so we can verify the player filter.
@@ -291,7 +296,7 @@ static void drawMenu() {
                 for (int i = 0; i < count && i < 6; ++i) {
                     uintptr_t handle = driver.read<uintptr_t>(buffer + 0x20 + (uintptr_t)i * 8);
                     if (!handle) continue;
-                    uintptr_t obj = decryption::base_networkable_0(handle);
+                    uintptr_t obj = decryption::client_entities(handle);
                     if (!obj) continue;
                     uintptr_t klass   = driver.read<uintptr_t>(obj);
                     uintptr_t namePtr = driver.read<uintptr_t>(klass + 0x10);
@@ -372,13 +377,13 @@ static void cheatThread() {
         }
 
         if (g_settings.speedHack) {
-            uintptr_t movement = driver.read<uintptr_t>(local + base_player::base_movement);
+            uintptr_t movement = driver.read<uintptr_t>(local + base_player::movement);
             if (movement) {
                 driver.write<float>(movement + player_walk_movement::TargetMovement, g_settings.speedValue);
             }
         } else {
             // restore default speed
-            uintptr_t movement = driver.read<uintptr_t>(local + base_player::base_movement);
+            uintptr_t movement = driver.read<uintptr_t>(local + base_player::movement);
             if (movement) {
                 float current = driver.read<float>(movement + player_walk_movement::TargetMovement);
                 if (current > 1.5f) // only reset if we modified it
@@ -403,11 +408,11 @@ static void cheatThread() {
 
         if (g_settings.wallhack) {
             // Set camera culling mask to show everything
-            const uintptr_t camStatic = camera::main_camera_c;
-            const uintptr_t camSfields = camStatic + camera::camera_static;
-            const uintptr_t camObj = driver.read<uintptr_t>(camSfields + camera::camera_object);
+            const uintptr_t camStatic = main_camera::base_address;
+            const uintptr_t camSfields = camStatic + main_camera::static_fields;
+            const uintptr_t camObj = driver.read<uintptr_t>(camSfields + main_camera::instance);
             if (camObj) {
-                driver.write<uint32_t>(camObj + camera::culling_mask, 0x7FFFFFFF);
+                driver.write<uint32_t>(camObj + main_camera::culling_mask, 0x7FFFFFFF);
             }
         }
     }
@@ -431,7 +436,7 @@ static DWORD WINAPI cheatMain(LPVOID) {
 
     dbglog("[*] resolveClasses done: BaseNetworkable=0x%llX Camera=0x%llX",
         (unsigned long long)base_networkable::base_address,
-        (unsigned long long)camera::main_camera_c);
+        (unsigned long long)main_camera::base_address);
 
     if (!g_overlay.init()) {
         dbglog("[!] overlay init FAILED");
@@ -468,3 +473,4 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+
