@@ -11,23 +11,46 @@ inline uintptr_t g_il2cppBase = 0;
 inline HINSTANCE g_dllInstance = nullptr;
 
 // ---------------------------------------------------------------------------
-//  حل کننده handle با دو RVA ممکن (آزمایش هر دو)
+//  تبدیل handle به آدرس واقعی (روش جایگزین بدون il2cpp_gchandle_get_target)
+//  از اطلاعات ۴ گرفته شده
+// ---------------------------------------------------------------------------
+inline uintptr_t resolve_tagged_handle(uint64_t decrypted) {
+    if (!decrypted) return 0;
+
+    // اگه LSB ست باشه، یک handle index هست
+    if (decrypted & 1) {
+        uint32_t idx = (uint32_t)decrypted;
+        if (idx == 0 || idx > 0x1000000) return 0;
+
+        // جدول GCHandle (از دامپ - gc_handles)
+        static uintptr_t gc_handle_table = 0;
+        if (!gc_handle_table) {
+            gc_handle_table = g_il2cppBase + 0x1017C260; // gc_handles از دامپ
+        }
+
+        uintptr_t target = driver.read<uintptr_t>(gc_handle_table + (uintptr_t)idx * 8);
+        return target;
+    }
+
+    // در غیر این صورت، خودش آدرس مستقیم هست
+    return (uintptr_t)decrypted;
+}
+
+// ---------------------------------------------------------------------------
+//  حل کننده handle با دو RVA ممکن (آزمایش هر دو) - به عنوان fallback
 // ---------------------------------------------------------------------------
 inline uintptr_t il2cpp_gchandle_get_target(uintptr_t handle) {
     if (!handle || !g_il2cppBase) return 0;
 
-    // RVAهای احتمالی از منابع مختلف
     static const uintptr_t rva_candidates[] = { 0x8365E0, 0x7D6AD0 };
     static uintptr_t fn = 0;
 
     if (!fn) {
-        // اولین بار که صدا زده میشود، هر دو را امتحان میکنیم
         for (int i = 0; i < 2; ++i) {
             uintptr_t addr = g_il2cppBase + rva_candidates[i];
-            // چک میکنیم که آیا آدرس معتبر به نظر میرسد (حداقل اولین بایت‌ها شبیه کد باشند)
             __try {
                 uint8_t first_byte = *(uint8_t*)addr;
-                if (first_byte == 0x48 || first_byte == 0xE9) { // احتمالاً یک تابع است
+                if (first_byte == 0x48 || first_byte == 0xE9) {
                     fn = addr;
                     break;
                 }
@@ -35,7 +58,6 @@ inline uintptr_t il2cpp_gchandle_get_target(uintptr_t handle) {
                 continue;
             }
         }
-        // اگر هیچکدام کار نکرد، از مقدار اول استفاده میکنیم
         if (!fn) fn = g_il2cppBase + 0x8365E0;
     }
 
