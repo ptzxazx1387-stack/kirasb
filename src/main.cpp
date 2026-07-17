@@ -262,8 +262,57 @@ static void drawMenu() {
         ImGui::Separator();
     }
     ImGui::Checkbox("Debug: show all entities", &g_settings.debugAll);
+
+    // ---- Runtime status (so we can tell offset/class bugs apart) ----
+    if (ImGui::CollapsingHeader("Debug Info", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("il2cpp base : 0x%llX", (unsigned long long)g_il2cppBase);
+        ImGui::Text("BaseNetworkable: 0x%llX %s", (unsigned long long)base_networkable::base_address,
+                    base_networkable::base_address ? "(OK)" : "(NOT FOUND!)");
+        ImGui::Text("Camera main : 0x%llX %s", (unsigned long long)camera::main_camera_c,
+                    camera::main_camera_c ? "(OK)" : "(NOT FOUND!)");
+
+        uintptr_t local = getLocalPlayer();
+        ImGui::Text("LocalPlayer : 0x%llX %s", (unsigned long long)local,
+                    local ? "(OK)" : "(NULL)");
+
+        // Sample the entity list directly and show how many we resolved.
+        if (g_il2cppBase && base_networkable::base_address) {
+            uintptr_t sfields    = driver.read<uintptr_t>(base_networkable::base_address + base_networkable::static_fields);
+            uintptr_t entities   = driver.read<uintptr_t>(sfields + base_networkable::entities);
+            uintptr_t buffer     = entities ? driver.read<uintptr_t>(entities + 0x10) : 0;
+            int       count      = entities ? driver.read<int>(entities + 0x18) : 0;
+            ImGui::Text("Entity list: sfields=0x%llX ents=0x%llX buf=0x%llX cnt=%d",
+                        (unsigned long long)sfields, (unsigned long long)entities,
+                        (unsigned long long)buffer, count);
+
+        // Show first few class names so we can verify the player filter.
+            if (buffer && count > 0 && count < 20000) {
+                ImGui::Text("First entities:");
+                for (int i = 0; i < count && i < 6; ++i) {
+                    uintptr_t handle = driver.read<uintptr_t>(buffer + 0x20 + (uintptr_t)i * 8);
+                    if (!handle) continue;
+                    uintptr_t obj = decryption::base_networkable_0(handle);
+                    if (!obj) continue;
+                    uintptr_t klass   = driver.read<uintptr_t>(obj);
+                    uintptr_t namePtr = driver.read<uintptr_t>(klass + 0x10);
+                    std::string cn = namePtr ? driver.readString(namePtr) : "?";
+                    ImGui::Text("  [%d] %s", i, cn.c_str());
+                }
+            }
+
+            // Quick offset sanity check: read local player's team + health
+            // using the claimed offsets. If these come back as sane numbers,
+            // the offsets are good; if they're 0 or garbage, offsets are wrong.
+            if (local) {
+                uint64_t team = driver.read<uint64_t>(local + base_player::current_team);
+                float hp = driver.read<float>(local + base_combat_entity::_health);
+                ImGui::Text("Local team=%llu health=%.1f", (unsigned long long)team, hp);
+            }
+            }
+        }
+    }
+
     ImGui::Text("Insert = toggle menu");
-    ImGui::Text("il2cpp base: 0x%llX", (unsigned long long)g_il2cppBase);
 
     ImGui::End();
     ImGui::PopStyleColor(5);
