@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdio>
 #include <windows.h>
+#include <stdarg.h>
 
 inline void dbglog(const char* fmt, ...) {
     static FILE* f = nullptr;

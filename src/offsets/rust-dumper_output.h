@@ -29,7 +29,6 @@ struct main_camera
     inline static uintptr_t entity = 0x10;
     inline static uintptr_t view_matrix = 0x2FC;
     inline static uintptr_t position = 0x444;
-    inline static uintptr_t culling_mask = 0x43C;
 };
 
 struct base_player
@@ -62,8 +61,6 @@ struct player_eyes
 struct player_model
 {
     inline static uintptr_t position = 0x2F8;
-    inline static uintptr_t rotation = 0x328;
-    inline static uintptr_t newVelocity = 0x31C;
 };
 
 struct base_projectile
@@ -73,12 +70,10 @@ struct base_projectile
     inline static uintptr_t aimSway = 0x3E8;
     inline static uintptr_t aimSwaySpeed = 0x3EC;
     inline static uintptr_t recoil = 0x3F0;
-    inline static uintptr_t projectileVelocityScale = 0x37C;
     inline static uintptr_t automatic = 0x380;
     inline static uintptr_t reloadTime = 0x3C0;
     inline static uintptr_t primaryMagazine = 0x3C8;
     inline static uintptr_t stancePenaltyScale = 0x418;
-    inline static uintptr_t hasADS = 0x41C;
 };
 
 struct recoil_properties
@@ -87,7 +82,6 @@ struct recoil_properties
     inline static uintptr_t recoilYawMax = 0x1C;
     inline static uintptr_t recoilPitchMin = 0x20;
     inline static uintptr_t recoilPitchMax = 0x24;
-    inline static uintptr_t clampPitch = 0x38;
 };
 
 struct item
@@ -96,13 +90,6 @@ struct item
     inline static uintptr_t info = 0x70;
     inline static uintptr_t amount = 0xF8;
     inline static uintptr_t heldEntity = 0x80;
-};
-
-struct player_inventory
-{
-    inline static uintptr_t containerWear = 0x30;
-    inline static uintptr_t containerMain = 0x38;
-    inline static uintptr_t containerBelt = 0x58;
 };
 
 // ---------------------------------------------------------------------------
@@ -132,55 +119,6 @@ inline uintptr_t client_entities(uint64_t encrypted) {
         p[i] = v;
     }
     return (uintptr_t)encrypted;
-}
-
-inline uintptr_t entity_list(uint64_t encrypted) {
-    uint32_t* p = (uint32_t*)&encrypted;
-    for (int i = 0; i < 2; ++i) {
-        uint32_t v = p[i];
-        v = _rotl(v, 10);
-        v ^= 0xF6BF245Du;
-        v = _rotl(v, 15);
-        v ^= 0x9BBD4311u;
-        p[i] = v;
-    }
-    return (uintptr_t)encrypted;
-}
-
-inline uintptr_t player_eyes(uint64_t encrypted) {
-    uint32_t* p = (uint32_t*)&encrypted;
-    for (int i = 0; i < 2; ++i) {
-        uint32_t v = p[i];
-        v = _rotl(v, 26);
-        v ^= 0x441ADFFDu;
-        v -= 0x426353FCu;
-        p[i] = v;
-    }
-    return (uintptr_t)encrypted;
-}
-
-inline uintptr_t player_inventory(uint64_t encrypted) {
-    uint32_t* p = (uint32_t*)&encrypted;
-    for (int i = 0; i < 2; ++i) {
-        uint32_t v = p[i];
-        v += 0x343EF771u;
-        v = _rotl(v, 25);
-        v -= 0x38A35400u;
-        p[i] = v;
-    }
-    return (uintptr_t)encrypted;
-}
-
-inline uint64_t active_item(uint64_t encrypted) {
-    uint32_t* p = (uint32_t*)&encrypted;
-    for (int i = 0; i < 2; ++i) {
-        uint32_t v = p[i];
-        v = _rotl(v, 30);
-        v ^= 0x4ED09CE6u;
-        v -= 0x2521E783u;
-        p[i] = v;
-    }
-    return encrypted;
 }
 
 } // namespace decryption

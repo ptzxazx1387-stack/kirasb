@@ -71,12 +71,3 @@ std::vector<EntityESP> gatherEntities(const Vec3& camPos) {
     }
     return out;
 }
-
-std::vector<EntityESP> gatherPlayers(const Vec3& camPos) {
-    std::vector<EntityESP> out;
-    auto all = gatherEntities(camPos);
-    for (auto& e : all) {
-        if (e.type == EntityType::Player) out.push_back(e);
-    }
-    return out;
-}
